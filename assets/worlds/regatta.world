@@ -8,9 +8,9 @@
     </scene>
 
     <physics type="ode">
-      <max_step_size>0.05</max_step_size>
+      <max_step_size>0.005</max_step_size>
       <real_time_factor>1</real_time_factor>
-      <real_time_update_rate>20</real_time_update_rate>
+      <real_time_update_rate>0</real_time_update_rate>
     </physics>
 
     <spherical_coordinates>
@@ -71,7 +71,8 @@
          direction 180), so the windward mark at x=+15 (North) is dead upwind:
          the boat must beat/tack up to it, then run back down to the leeward mark. -->
     <include>
-      <uri>model://regatta_buoy</uri><name>mark_windward</name><pose>15 0 0 0 0 0</pose>
+      <!-- gz is ENU: xdyn NED windward mark (15 North, 0 East) renders at ENU (x=0, y=15). -->
+      <uri>model://regatta_buoy</uri><name>mark_windward</name><pose>0 15 0 0 0 0</pose>
     </include>
     <include>
       <uri>model://regatta_buoy</uri><name>mark_leeward</name><pose>0 0 0 0 0 0</pose>
@@ -80,7 +81,10 @@
     <include>
       <uri>model://focus_v2</uri>
       <name>focus_v2</name>
-      <pose>0 0 0 0 0 0</pose>
+      <!-- gz ENU spawn yaw 30deg = NED heading 60deg = close-hauled on starboard (wind from
+           North). The physics plugin seeds xdyn's initial orientation from this gz pose, so the
+           boat must start on a sailing angle, not bow-to-wind (else it stalls in irons). -->
+      <pose>0 0 0 0 0 0.5236</pose>
 
       <lotus_param>
         <physics_engine_interface>
