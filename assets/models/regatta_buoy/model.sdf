@@ -4,11 +4,7 @@
     <static>true</static>
     <link name="buoy">
       <visual name="buoy">
-        <geometry><cylinder><radius>0.15</radius><length>0.6</length></cylinder></geometry>
-        <material>
-          <ambient>0.9 0.4 0.0 1</ambient>
-          <diffuse>1.0 0.45 0.0 1</diffuse>
-        </material>
+        <geometry><mesh><uri>model://regatta_buoy/meshes/regatta_buoy.obj</uri></mesh></geometry>
       </visual>
     </link>
   </model>
