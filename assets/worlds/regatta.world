@@ -1,0 +1,107 @@
+<?xml version="1.0"?>
+<sdf version="1.7">
+  <world name="lotusim">
+    <scene>
+      <ambient>1.0 1.0 1.0</ambient>
+      <background>0.6 0.75 0.9</background>
+      <grid>false</grid>
+    </scene>
+
+    <physics type="ode">
+      <max_step_size>0.05</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>20</real_time_update_rate>
+    </physics>
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>1.2421</latitude_deg>
+      <longitude_deg>103.7198</longitude_deg>
+      <elevation>0</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+
+    <!-- xdyn provides all forces; Gazebo gravity is off. -->
+    <gravity>0 0 0</gravity>
+
+    <plugin filename="physics_interface_plugin"
+            name="lotusim::gazebo::PhysicsInterfacePlugin"/>
+    <plugin filename="entity_manager_plugin"
+            name="lotusim::gazebo::EntityManager"/>
+    <plugin filename="lotusim_sensor_plugin"
+            name="lotusim::sensor::LotusimSensorPlugin"/>
+    <plugin filename="render_plugin" name="lotusim::gazebo::RenderPlugin">
+      <connection_protocol>ROS2</connection_protocol>
+    </plugin>
+    <!-- LOTUSim worlds normally render in Unity; the scene broadcaster makes
+         the gz <visual>s and pose topics available for a self-contained gz run. -->
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster"/>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.4 0.3 -0.9</direction>
+    </light>
+
+    <!-- Flat sea surface at the waterline (visual only). -->
+    <model name="sea">
+      <static>true</static>
+      <link name="surface">
+        <visual name="surface">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>60 60</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.10 0.30 0.45 1</ambient>
+            <diffuse>0.15 0.40 0.55 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Windward-leeward course. Wind blows FROM the North (focus_v2.yaml
+         direction 180), so the windward mark at x=+15 (North) is dead upwind:
+         the boat must beat/tack up to it, then run back down to the leeward mark. -->
+    <include>
+      <uri>model://regatta_buoy</uri><name>mark_windward</name><pose>15 0 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://regatta_buoy</uri><name>mark_leeward</name><pose>0 0 0 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://focus_v2</uri>
+      <name>focus_v2</name>
+      <pose>0 0 0 0 0 0</pose>
+
+      <lotus_param>
+        <physics_engine_interface>
+          <surface>
+            <connection_type>XDynWebSocket</connection_type>
+            <uri>ws://127.0.0.1:12345</uri>
+            <!-- Angle-commanded actuators: full xdyn command signals, seeded to
+                 0.0 at spawn so the co-sim does not throw before the first ROS
+                 setpoint. -->
+            <control_surfaces>
+              <sail>mainsail(sheet)</sail>
+              <rudder>rudder(helm)</rudder>
+            </control_surfaces>
+          </surface>
+          <init_state>Surface</init_state>
+        </physics_engine_interface>
+        <render_interface>
+          <publish_render>true</publish_render>
+          <renderer_type_name>focus_v2</renderer_type_name>
+        </render_interface>
+      </lotus_param>
+    </include>
+  </world>
+</sdf>
