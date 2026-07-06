@@ -8,7 +8,7 @@ set -u
 DUR=${1:-120}
 MODE=${2:-hold}
 docker run --rm --platform linux/amd64 --name regatta -v ~/src/lotusim-lab:/lab \
-  -e DUR="$DUR" -e MODE="$MODE" -e HELM_TEST="${HELM_TEST:-}" \
+  -e DUR="$DUR" -e MODE="$MODE" -e HELM_TEST="${HELM_TEST:-}" -e WS_TAP="${WS_TAP:-}" \
   lotusim:focus-v2 bash -lc '
     XPID= GPID= HPID= WPID=   # ROS setup.bash is not set -u safe; do not enable set -u here
     cleanup(){ kill -9 $XPID $GPID $HPID $WPID 2>/dev/null; }  # gz ignores SIGTERM -> SIGKILL
@@ -39,6 +39,15 @@ PY
       /lab/LOTUSim/physics/xdyn-for-cs "$MODEL" -s rk4 --dt 0.001 -a 127.0.0.1 -p 12345 \
       ) > /tmp/xdyn.log 2>&1 & XPID=$!
     sleep 4
+    WORLD=/lab/LOTUSim-regatta/assets/worlds/regatta.world
+    if [ -n "$WS_TAP" ]; then
+      # Passive ws logging tap: gz plugin -> :9999 (tap) -> :12345 (xdyn), passthrough logged as JSONL.
+      python3 /lab/LOTUSim-regatta/scripts/ws_tap.py --log /lab/LOTUSim-regatta/_tap.jsonl \
+        > /tmp/ws_tap.log 2>&1 & WPID=$!
+      sleep 1
+      sed "s|ws://127.0.0.1:12345|ws://127.0.0.1:9999|" "$WORLD" > /tmp/regatta_tap.world
+      WORLD=/tmp/regatta_tap.world
+    fi
     # Start the helmsman BEFORE gz. As a ROS2 node it (a) pre-creates a DDS participant in
     # the domain -- under Rosetta the gz plugins deadlock creating the FIRST participant, so
     # one must already exist -- and (b) publishes vessel_cmd_array continuously, so xdyn
@@ -46,7 +55,7 @@ PY
     # (otherwise xdyn errors "Unable to find signal" and the plugin crashes parsing the reply).
     python3 -u -m regatta_agents.helmsman > /tmp/helm.log 2>&1 & HPID=$!
     sleep 3
-    gz sim -s -r /lab/LOTUSim-regatta/assets/worlds/regatta.world > /tmp/gz.log 2>&1 & GPID=$!
+    gz sim -s -r "$WORLD" > /tmp/gz.log 2>&1 & GPID=$!
     sleep 8
     RC=0
     if [ "$MODE" = "smoke" ]; then

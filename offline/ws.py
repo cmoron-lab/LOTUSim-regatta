@@ -7,7 +7,7 @@ Co-sim rule: rkck is forbidden (monotonic clock) -> rk4. Launch with a fine --dt
 and, for maneuvers, communicate no faster than needed (effective step = min(--dt,
 Dt)). xdyn convention (verified): quaternion (qr,qi,qj,qk) = attitude body->NED;
 velocities (u,v,w),(p,q,r) = body frame; position (x,y,z) = NED."""
-import base64, json, math, os, re, socket, struct, subprocess
+import base64, json, math, os, re, socket, struct, subprocess, time
 
 LAB = os.path.expanduser("~/src/lotusim-lab")
 IMAGE = "lotusim:focus-v2"
@@ -118,12 +118,29 @@ INIT = {"t": 0.0, "x": 0.0, "y": 0.0, "z": 0.0, "qi": 0.0, "qj": 0.0, "qk": 0.0,
 FIELDS = ("t", "x", "y", "z", "qi", "qj", "qk", "qr", "u", "v", "w", "p", "q", "r")
 
 
+_LOGF = None
+
+
+def _wslog(direction, msg):
+    global _LOGF
+    path = os.environ.get("WS_LOG")
+    if not path:
+        return
+    if _LOGF is None:
+        _LOGF = open(path, "w", buffering=1)
+    _LOGF.write(json.dumps({"ts": time.time(), "dir": direction, "msg": msg},
+                            separators=(",", ":")) + "\n")
+
+
 def step(sock, state, sheet_rad, helm_rad, dt):
     req = {"Dt": dt, "states": [state],
            "commands": {"mainsail(sheet)": sheet_rad, "rudder(helm)": helm_rad},
            "requested_output": []}
+    _wslog("c2x", req)
     ws_send(sock, json.dumps(req))
-    reply = json.loads(ws_recv(sock))
+    reply_text = ws_recv(sock)
+    reply = json.loads(reply_text)
+    _wslog("x2c", reply)
     if isinstance(reply, dict) and "error" in reply:
         raise RuntimeError("xdyn: " + str(reply["error"])[:200])
     out = {}
