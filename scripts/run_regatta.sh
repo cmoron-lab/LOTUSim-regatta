@@ -4,14 +4,22 @@
 # Usage: run_regatta.sh [duration_s] [hold|smoke]
 #   hold  = keep the stack up for the duration (interactive / Unity)   [default]
 #   smoke = run the gz pose oracle as a pass/fail gate (rounds both marks?)
+# UNITY=1 (non-empty): also publish the ROS-TCP endpoint (port 10000) and wait for
+#   Unity to connect before starting xdyn/gz/helmsman -- image has ros_tcp_endpoint
+#   built in (colcon build --packages-select ros_tcp_endpoint, vendored from
+#   LOTUSim-Unity-modules/Submodules/ROS-TCP-Endpoint).
 set -u
 DUR=${1:-120}
 MODE=${2:-hold}
+UNITY_PORT=
+[ -n "${UNITY:-}" ] && UNITY_PORT="-p 10000:10000"
 docker run --rm --platform linux/amd64 --name regatta -v ~/src/lotusim-lab:/lab \
+  $UNITY_PORT \
   -e DUR="$DUR" -e MODE="$MODE" -e HELM_TEST="${HELM_TEST:-}" -e WS_TAP="${WS_TAP:-}" \
+  -e UNITY="${UNITY:-}" \
   lotusim:focus-v2 bash -lc '
-    XPID= GPID= HPID= WPID=   # ROS setup.bash is not set -u safe; do not enable set -u here
-    cleanup(){ kill -9 $XPID $GPID $HPID $WPID 2>/dev/null; }  # gz ignores SIGTERM -> SIGKILL
+    XPID= GPID= HPID= WPID= EPID=   # ROS setup.bash is not set -u safe; do not enable set -u here
+    cleanup(){ kill -9 $XPID $GPID $HPID $WPID $EPID 2>/dev/null; }  # gz ignores SIGTERM -> SIGKILL
     trap cleanup EXIT
     source /opt/ros/jazzy/setup.bash
     source /lotusim_ws/install/setup.bash
@@ -21,6 +29,21 @@ docker run --rm --platform linux/amd64 --name regatta -v ~/src/lotusim-lab:/lab 
     # FastDDS shared-memory transport deadlocks the gz ROS2 plugins under Rosetta/amd64
     # emulation (gz hangs at init). Force UDP-only transport -> plugins load & run.
     export FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+    if [ -n "$UNITY" ]; then
+      # Endpoint first, before anything else (even xdyn): it doubles as the
+      # preexisting DDS participant that unblocks Rosetta (see helmsman-before-gz
+      # comment below) -- xdyn -> helmsman -> gz order is otherwise unchanged.
+      echo "[*] ros_tcp_endpoint on 0.0.0.0:10000"
+      ros2 run ros_tcp_endpoint default_server_endpoint \
+        --ros-args -p ROS_IP:=0.0.0.0 -p ROS_TCP_PORT:=10000 > /tmp/endpoint.log 2>&1 & EPID=$!
+      for _ in $(seq 1 24); do
+        grep -q "Connection from" /tmp/endpoint.log 2>/dev/null && { echo "[*] Unity connected"; break; }
+        echo "[*] waiting for Unity (open the Regatta scene, press Play)..."
+        sleep 5
+      done
+      grep -q "Connection from" /tmp/endpoint.log 2>/dev/null || \
+        echo "[!] WARNING: no Unity connection after 120s -- continuing headless (rendering will be missing, sim runs)."
+    fi
     # temp model: wind FROM North (direction 180), and start CLOSE-HAULED with way on
     # (psi 60deg, u 0.8) like the offline oracle -- a boat starting at rest bow-to-wind
     # sits in irons and cannot bear away (the sail cannot fill head-to-wind at zero speed).
