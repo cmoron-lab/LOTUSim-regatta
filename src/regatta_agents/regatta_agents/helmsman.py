@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Cyril Moron — EPL-2.0
 """Thin ROS2 helmsman: gz pose -> Pilot -> vessel_cmd_array. The control brain is
 regatta_agents.pilot.Pilot (offline-validated). Seeds a neutral setpoint on start."""
-import json, math, os
+import json, math
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
@@ -54,7 +54,6 @@ class Helmsman(Node):
                                      1 - 2 * (q.y * q.y + q.z * q.z))   # yaw about Z-up, from East CCW
                 d = math.pi / 2 - yaw_enu                               # NED heading: from North CW
                 yaw = math.atan2(math.sin(d), math.cos(d))
-                self._enu = (e.position.x, e.position.y, math.degrees(yaw_enu))  # debug
                 # yaw rate by finite difference on the message header stamp (Pilot damping term)
                 t = msg.header.stamp.sec + msg.header.stamp.nsec * 1e-9
                 if self._prev_yaw is not None and self._prev_t is not None and t > self._prev_t:
@@ -63,19 +62,8 @@ class Helmsman(Node):
                 self.yaw, self._prev_yaw, self._prev_t = yaw, yaw, t
 
     def _control(self):
-        ht = os.environ.get("HELM_TEST")   # debug: constant helm (deg), ignore Pilot -> is the rudder effective?
-        if ht:
-            sheet, helm = math.radians(25.0), math.radians(float(ht))
-        else:
-            sheet, helm = self.pilot.update(self.x, self.y, self.yaw, self.r)
+        sheet, helm = self.pilot.update(self.x, self.y, self.yaw, self.r)
         self._publish(sheet, helm)
-        self._dbg = getattr(self, "_dbg", 0) + 1
-        if self._dbg % 30 == 0:
-            enu = getattr(self, "_enu", (0, 0, 0))
-            print(f"[helm] enu=({enu[0]:.1f},{enu[1]:.1f},yaw{enu[2]:.0f}) "
-                  f"ned=({self.x:.1f},{self.y:.1f},yaw{math.degrees(self.yaw):.0f}) r={self.r:.2f} "
-                  f"wp{self.pilot.wp} tk{int(self.pilot.tacking)} tack{self.pilot.tack} "
-                  f"sheet{math.degrees(sheet):.0f} helm{math.degrees(helm):.0f}", flush=True)
 
     def _publish(self, sheet, helm):
         cmd = VesselCmd()

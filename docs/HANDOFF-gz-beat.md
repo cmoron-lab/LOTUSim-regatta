@@ -1,5 +1,17 @@
 # LOTUSim-regatta — Gz co-sim "close-hauled beat": problem statement & handoff
 
+> ## ✅ RESOLVED (2026-07-06)
+> Root cause: two quaternion bugs in the LOTUSim `physics_engine_interface` plugin
+> (separate repo, not this one) — (1) a qj/qk swap on receive, fixed upstream
+> 2026-07-02 but absent from the 2026-06-27 docker image (needs a plugin rebuild),
+> (2) an attitude conversion missing the FLU↔FRD body-frame offset
+> (`ψ_ned = π/2 − ψ_enu`, not `−ψ_enu`). Verdict: **SMOKE PASS 2/2 marks**
+> (windward 1.30 m, leeward 0.08 m, 4 tacks, ~163 s sim), trajectory matches the
+> offline oracle to ±1.5 s. Ops notes: the rebuilt plugin `.so` is deployed via
+> `_patched_lib/` (copied into the container by `run_regatta.sh`, gitignored);
+> smoke duration is **wall-clock**, and Rosetta RTF ≈ 0.26 → ~900 s wall for one
+> full lap (~230 s sim).
+
 > **For the next agent (Fable 5):** the physics is proven; the boat will not yet
 > sail a close-hauled **beat** through the **full gz co-sim stack**. Everything you
 > need is below. **Do not re-guess rudder signs or re-discover the infra fixes** —
