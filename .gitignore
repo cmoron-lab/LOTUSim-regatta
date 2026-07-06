@@ -5,3 +5,7 @@ install/
 log/
 .DS_Store
 offline/_*.yaml
+_tap.jsonl
+_probe.jsonl
+_oracle.jsonl
+_patched_lib/

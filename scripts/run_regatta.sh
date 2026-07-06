@@ -55,6 +55,8 @@ PY
     # (otherwise xdyn errors "Unable to find signal" and the plugin crashes parsing the reply).
     python3 -u -m regatta_agents.helmsman > /tmp/helm.log 2>&1 & HPID=$!
     sleep 3
+    [ -f /lab/LOTUSim-regatta/_patched_lib/libphysics_interface_plugin.so ] && \
+      cp /lab/LOTUSim-regatta/_patched_lib/libphysics_interface_plugin.so /lotusim_ws/install/lib/
     gz sim -s -r "$WORLD" > /tmp/gz.log 2>&1 & GPID=$!
     sleep 8
     RC=0
