@@ -46,6 +46,9 @@ public class RegattaCameraRig : MonoBehaviour
                 Vector3 e = transform.rotation.eulerAngles;
                 _freeYaw = e.y; _freePitch = e.x > 180f ? e.x - 360f : e.x;
             }
+            // FPS-style cursor capture in Free mode only.
+            Cursor.lockState = _mode == Mode.Free ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = _mode != Mode.Free;
         }
 
         Vector3 delta = _target.position - _lastPos;
@@ -101,9 +104,16 @@ public class RegattaCameraRig : MonoBehaviour
             }
             case Mode.Free:
             {
+                // FPS look: cursor locked, mouse steers directly (no button held).
+                // Esc releases the cursor (Unity editor grabs it); click recaptures.
+                if (Cursor.lockState != CursorLockMode.Locked && Input.GetMouseButtonDown(0))
+                { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; }
+                bool captured = Cursor.lockState == CursorLockMode.Locked;
+                float fx = captured ? Input.GetAxis("Mouse X") * 3f : mx;
+                float fy = captured ? Input.GetAxis("Mouse Y") * 3f : my;
                 freeSpeed = Mathf.Clamp(freeSpeed * (1f + scroll), 0.3f, 50f);
-                _freeYaw += mx;
-                _freePitch = Mathf.Clamp(_freePitch - my, -89f, 89f);
+                _freeYaw += fx;
+                _freePitch = Mathf.Clamp(_freePitch - fy, -89f, 89f);
                 transform.rotation = Quaternion.Euler(_freePitch, _freeYaw, 0f);
                 Vector3 move = new Vector3(Input.GetAxis("Horizontal"), 0f, Input.GetAxis("Vertical"));
                 if (Input.GetKey(KeyCode.E)) move.y += 1f;
