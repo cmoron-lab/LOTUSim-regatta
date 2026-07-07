@@ -11,6 +11,9 @@
 set -u
 DUR=${1:-120}
 MODE=${2:-hold}
+# Ctrl-C must kill the container: in-container bash is PID1 and ignores SIGINT,
+# so the EXIT cleanup trap never fires without this host-side backstop.
+trap 'docker rm -f regatta >/dev/null 2>&1' INT TERM
 UNITY_PORT=
 [ -n "${UNITY:-}" ] && UNITY_PORT="-p 10000:10000"
 docker run --rm --platform linux/amd64 --name regatta -v ~/src/lotusim-lab:/lab \
