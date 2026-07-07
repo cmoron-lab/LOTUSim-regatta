@@ -28,14 +28,12 @@ public class RegattaCameraRig : MonoBehaviour
     {
         if (_target == null)
         {
-            // The connector may or may not rename the spawned instance: try the
-            // exact name, the (Clone) variant, then any root starting with it.
-            var go = GameObject.Find(targetName)
-                     ?? GameObject.Find(targetName + "(Clone)");
-            if (go == null)
-                foreach (var root in UnityEngine.SceneManagement.SceneManager
-                             .GetActiveScene().GetRootGameObjects())
-                    if (root.name.StartsWith(targetName)) { go = root; break; }
+            // The spawned boat is the only object carrying an ActuatorAnimator —
+            // name-independent (the connector may rename the instance).
+            var anim = FindObjectOfType<ActuatorAnimator>();
+            var go = anim != null ? anim.gameObject
+                     : GameObject.Find(targetName)
+                       ?? GameObject.Find(targetName + "(Clone)");
             if (go == null) return;
             _target = go.transform;
             _lastPos = _target.position;
@@ -92,7 +90,8 @@ public class RegattaCameraRig : MonoBehaviour
 
     void OnGUI()
     {
-        GUI.Label(new Rect(10, 10, 400, 24),
-            $"[C] camera: {_mode}" + (_target == null ? "  (waiting for boat...)" : ""));
+        GUI.Label(new Rect(10, 10, 500, 24),
+            $"[C] camera: {_mode} | v2 | " +
+            (_target == null ? "waiting for boat..." : $"target: {_target.name}"));
     }
 }
