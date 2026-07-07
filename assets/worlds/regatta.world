@@ -8,7 +8,10 @@
     </scene>
 
     <physics type="ode">
-      <max_step_size>0.005</max_step_size>
+      <!-- comm step to xdyn (one blocking ws round-trip per step, ~18 ms under Rosetta).
+           0.01 doubles RTF vs 0.005; oracle-validated at 0.005/0.01/0.02 with xdyn
+           substepping internally at its own dt 0.001. -->
+      <max_step_size>0.01</max_step_size>
       <real_time_factor>1</real_time_factor>
       <real_time_update_rate>0</real_time_update_rate>
     </physics>

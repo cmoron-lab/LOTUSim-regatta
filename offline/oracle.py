@@ -11,8 +11,12 @@ from regatta_agents.pilot import Pilot  # noqa: E402
 import ws  # noqa: E402
 
 
-def run_lap(wind_dir_deg=180, marks=((15.0, 0.0), (0.0, 0.0)), dt=0.005, tmax=170.0):
+def run_lap(wind_dir_deg=180, marks=((15.0, 0.0), (0.0, 0.0)), dt=0.001, comm_dt=0.005,
+            tmax=170.0):
     """wind_dir_deg is the yaml compass bearing the wind blows TOWARD (180 => from North).
+    `dt` = xdyn internal integration step (--dt). `comm_dt` = co-sim communication step
+    (Dt per websocket round-trip); xdyn substeps comm_dt internally at dt, so the two
+    are independent. Override comm_dt via env COMM_DT to A/B the comm rate.
     Returns (marks_reached, tacks, trajectory)."""
     wind_from = math.radians(wind_dir_deg - 180)   # 180 blows to S -> wind_from = 0 (N)
     ws.write_model(wind_dir_deg)
@@ -23,9 +27,9 @@ def run_lap(wind_dir_deg=180, marks=((15.0, 0.0), (0.0, 0.0)), dt=0.005, tmax=17
         pilot = Pilot(marks=list(marks), wind_from=wind_from)
         st = ws.init_at(wind_from + math.radians(60), u=0.8)
         traj = []
-        for _ in range(int(tmax / dt)):
+        for _ in range(int(tmax / comm_dt)):
             sheet, helm = pilot.update(st["x"], st["y"], ws.yaw_of(st), st["r"])
-            st = ws.step(sock, st, sheet, helm, dt)
+            st = ws.step(sock, st, sheet, helm, comm_dt)
             traj.append(dict(st))
             if pilot.finished:
                 break
@@ -35,8 +39,9 @@ def run_lap(wind_dir_deg=180, marks=((15.0, 0.0), (0.0, 0.0)), dt=0.005, tmax=17
 
 
 if __name__ == "__main__":
-    reached, tacks, traj = run_lap()
-    print(f"marks reached {reached}/2 | tacks {tacks} | dur {traj[-1]['t']:.0f}s")
+    comm_dt = float(os.environ.get("COMM_DT", 0.005))
+    reached, tacks, traj = run_lap(comm_dt=comm_dt)
+    print(f"comm_dt {comm_dt} | marks reached {reached}/2 | tacks {tacks} | dur {traj[-1]['t']:.0f}s")
     assert reached >= 2, f"lap incomplete: only {reached}/2 marks"
     assert tacks >= 1, f"no tack performed (tacks={tacks})"
     print("ORACLE PASS")
