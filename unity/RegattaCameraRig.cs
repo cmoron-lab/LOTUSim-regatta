@@ -12,7 +12,7 @@ using UnityEngine;
 
 public class RegattaCameraRig : MonoBehaviour
 {
-    public string targetName = "focus_v2(Clone)";
+    public string targetName = "focus_v2";
     public float chaseDistance = 2.2f, chaseHeight = 1.0f;
     public float orbitDistance = 3f;
     public Vector3 onboardOffset = new Vector3(0f, 0.35f, -0.30f); // up, back (vs motion)
@@ -28,7 +28,14 @@ public class RegattaCameraRig : MonoBehaviour
     {
         if (_target == null)
         {
-            var go = GameObject.Find(targetName);
+            // The connector may or may not rename the spawned instance: try the
+            // exact name, the (Clone) variant, then any root starting with it.
+            var go = GameObject.Find(targetName)
+                     ?? GameObject.Find(targetName + "(Clone)");
+            if (go == null)
+                foreach (var root in UnityEngine.SceneManagement.SceneManager
+                             .GetActiveScene().GetRootGameObjects())
+                    if (root.name.StartsWith(targetName)) { go = root; break; }
             if (go == null) return;
             _target = go.transform;
             _lastPos = _target.position;
