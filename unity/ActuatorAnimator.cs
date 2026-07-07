@@ -35,11 +35,11 @@ public class ActuatorAnimator : MonoBehaviour
 
     void Start()
     {
-        _boom = Find(transform, "Boom");
-        _mainsail = Find(transform, "Mainsail");
-        _rudder = Find(transform, "Rudder");
-        _hull = Find(transform, "Hull");
-        _bow = Find(transform, "BowNose");
+        _boom = FindPart("Boom");
+        _mainsail = FindPart("Mainsail");
+        _rudder = FindPart("Rudder");
+        _hull = FindPart("Hull");
+        _bow = FindPart("BowNose");
         if (_boom) _boomRest = _boom.localRotation;
         if (_mainsail) _sailRest = _mainsail.localRotation;
         if (_rudder) _rudderRest = _rudder.localRotation;
@@ -86,15 +86,22 @@ public class ActuatorAnimator : MonoBehaviour
         if (_rudder) _rudder.localRotation = Quaternion.AngleAxis(_rudderAngle, Vector3.up) * _rudderRest;
     }
 
-    static Transform Find(Transform root, string name)
+    Transform FindPart(string name)
+    {
+        var hit = FindRec(transform, name);
+        if (hit == null)
+            Debug.LogWarning($"ActuatorAnimator: '{name}' not found under {transform.name}");
+        return hit;
+    }
+
+    static Transform FindRec(Transform root, string name)
     {
         if (root.name == name) return root;
         foreach (Transform child in root)
         {
-            var hit = Find(child, name);
+            var hit = FindRec(child, name);
             if (hit) return hit;
         }
-        Debug.LogWarning($"ActuatorAnimator: '{name}' not found under {root.name}");
         return null;
     }
 }
