@@ -4,7 +4,7 @@ regatta_agents.pilot.Pilot (offline-validated). Seeds a neutral setpoint on star
 import json, math
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from lotusim_msgs.msg import VesselCmd, VesselCmdArray
 from regatta_agents.pilot import Pilot, opt_sheet
 
@@ -32,8 +32,13 @@ class Helmsman(Node):
         self._prev_yaw = None
         self._prev_t = None
 
+        # TRANSIENT_LOCAL: compatible with every subscriber (gz plugin = volatile,
+        # ros-tcp-endpoint = transient-local — a volatile publisher is silently
+        # rejected by the endpoint: "incompatible QoS ... DURABILITY"), and late
+        # joiners (Unity pressing Play mid-run) get the last command immediately.
         qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE,
-                         history=HistoryPolicy.KEEP_LAST)
+                         history=HistoryPolicy.KEEP_LAST,
+                         durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub = self.create_publisher(VesselCmdArray, f"/{self.world}/vessel_cmd_array", qos)
         self._publish(opt_sheet(0.0), 0.0)   # seed neutral so xdyn has a command
 
