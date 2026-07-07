@@ -1,0 +1,175 @@
+# Focus V2 — 1 m RC sailboat (Joysway Focus V2) xdyn model
+# Three-foil rig: aerodynamic-polar SAIL (wind-driven) + hydrodynamic-polar KEEL (fixed,
+# resists leeway) + hydrodynamic-polar RUDDER (steered).  Co-simulation model for LOTUSim.
+#
+# Frames: NED (X-North, Y-East, Z-Down); body X-fwd, Y-stbd, Z-down. STL authored in body
+# axes (bow +X, stbd +Y, Z down), origin at waterline mid-length -> body-frame-relative-to-mesh
+# is identity.  Hull mesh = canoe body only (buoyancy); keel-bulb weight is carried by the low
+# centre of inertia (righting moment); keel/rudder hydrodynamics are the polar force models.
+#
+# Hull dims from published Focus V2 specs (LOA 0.995 m, beam 0.17 m, RTR mass 2.93 kg,
+# sail area main+jib ~0.555 m^2, keel draft ~0.39 m).  ALL hydro/aero coefficients, inertias,
+# added mass and damping below are ENGINEERING ESTIMATES tuned only to sail plausibly.
+# # ESTIMATED — pending naval-engineer validation  (applies to every numeric coefficient here)
+
+rotations convention: [psi, theta', phi'']
+
+environmental constants:
+    g:       {value: 9.81,    unit: m/s^2}
+    rho:     {value: 1025.0,  unit: kg/m^3}    # sea water
+    nu:      {value: 1.18e-6, unit: m^2/s}
+    air rho: {value: 1.225,   unit: kg/m^3}    # required by the aerodynamic (sail) model
+
+environment models:
+    - model: no waves
+      constant sea elevation in NED frame: {value: 0.0, unit: m}
+    - model: uniform wind                       # ESTIMATED demo breeze
+      velocity:  {unit: m/s, value: 3.0}
+      direction: {unit: deg, value: 180}       # compass bearing the wind blows TOWARD (N0 E90 S180 W270)
+
+bodies:
+  - name: focus_v2
+    mesh: /lab/LOTUSim/assets/models/focus_v2/meshes/focus_v2.stl
+
+    position of body frame relative to mesh:    # STL already in body axes, origin at WL centre
+      frame: mesh
+      x: {value: 0.0, unit: m}
+      y: {value: 0.0, unit: m}
+      z: {value: 0.0, unit: m}
+      phi:   {value: 0.0, unit: rad}
+      theta: {value: 0.0, unit: rad}
+      psi:   {value: 0.0, unit: rad}
+
+    initial position of body frame relative to NED:
+      frame: NED
+      x: {value: 0.0, unit: m}
+      y: {value: 0.0, unit: m}
+      z: {value: 0.0, unit: m}                  # hydrostatics will settle the draft
+      phi:   {value: 0.0, unit: deg}
+      theta: {value: 0.0, unit: deg}
+      psi:   {value: 90.0, unit: deg}            # bow North
+
+    initial velocity of body frame relative to NED:
+      frame: focus_v2
+      u: {value: 0.6, unit: m/s}
+      v: {value: 0.0, unit: m/s}
+      w: {value: 0.0, unit: m/s}
+      p: {value: 0.0, unit: rad/s}
+      q: {value: 0.0, unit: rad/s}
+      r: {value: 0.0, unit: rad/s}
+
+    dynamics:
+      hydrodynamic forces calculation point in body frame:
+        x: {value: 0.0,  unit: m}
+        y: {value: 0.0,  unit: m}
+        z: {value: 0.03, unit: m}               # ~ centre of buoyancy, just below WL
+
+      centre of inertia:                         # low CoG (lead bulb) -> righting moment
+        frame: focus_v2
+        x: {value: 0.02, unit: m}
+        y: {value: 0.0,  unit: m}
+        z: {value: 0.34, unit: m}               # 0.34 m below WL (body Z down) -> righting  # ESTIMATED
+
+      # m = 2.93 kg ; Ixx roll, Iyy pitch, Izz yaw  # ESTIMATED
+      rigid body inertia matrix at the center of gravity and projected in the body frame:
+        frame: body
+        row 1: [2.93, 0,    0,    0,    0,    0   ]
+        row 2: [0,    2.93, 0,    0,    0,    0   ]
+        row 3: [0,    0,    2.93, 0,    0,    0   ]
+        row 4: [0,    0,    0,    0.20, 0,    0   ]
+        row 5: [0,    0,    0,    0,    0.32, 0   ]
+        row 6: [0,    0,    0,    0,    0,    0.12]
+
+      # slender-hull added mass  # ESTIMATED
+      added mass matrix at the center of gravity and projected in the body frame:
+        frame: body
+        row 1: [0.30, 0,    0,    0,    0,    0   ]
+        row 2: [0,    2.00, 0,    0,    0,    0   ]
+        row 3: [0,    0,    2.50, 0,    0,    0   ]
+        row 4: [0,    0,    0,    0.02, 0,    0   ]
+        row 5: [0,    0,    0,    0,    0.10, 0   ]
+        row 6: [0,    0,    0,    0,    0,    0.10]
+
+    external forces:
+      - model: gravity
+      - model: non-linear hydrostatic (fast)
+
+      # baseline linear damping (mostly numerical stability)  # ESTIMATED
+      - model: linear damping
+        damping matrix at the center of gravity projected in the body frame:
+          frame: focus_v2
+          row 1: [0.5, 0,   0,   0,   0,   0  ]
+          row 2: [0,   3.0, 0,   0,   0,   0  ]
+          row 3: [0,   0,   6.0, 0,   0,   0  ]
+          row 4: [0,   0,   0,   1.5, 0,   0  ]
+          row 5: [0,   0,   0,   0,   3.0, 0  ]
+          row 6: [0,   0,   0,   0,   0,   2.0]   # yaw: amorti modéré = stabilité de cap (aide le pilotage). PAS un fix du 360 : celui-ci était NUMÉRIQUE (rk4 pas fixe 0.02 trop grossier) — cf README.  # ESTIMATED
+
+      # quadratic damping: hull surge resistance + strong lateral/yaw resistance  # ESTIMATED
+      - model: quadratic damping
+        damping matrix at the center of gravity projected in the body frame:
+          frame: focus_v2
+          row 1: [5.0,  0,    0,    0,   0,   0  ]
+          row 2: [0,    25.0, 0,    0,   0,   0  ]
+          row 3: [0,    0,    30.0, 0,   0,   0  ]
+          row 4: [0,    0,    0,    6.0, 0,   0  ]
+          row 5: [0,    0,    0,    0,   8.0, 0  ]
+          row 6: [0,    0,    0,    0,   0,   3.0]   # yaw quad: amorti modéré = stabilité de cap  # ESTIMATED
+
+      # ---- SAIL : aerodynamic polar (driven by apparent wind, trimmed by 'sheet') ----
+      # Cl/Cd vs the sail angle of attack (= apparent wind angle - sheet command).
+      # Peak lift ~18-25 deg (thin cambered sail), gentle stall, flat-plate beyond.  # ESTIMATED
+      - model: aerodynamic polar
+        name: mainsail
+        reference area: {value: 0.40, unit: m^2}    # ESTIMATED — modelled "depowered" (< 0.555 m^2 full) to cap heel
+        AWA: {unit: deg, values: [0, 10, 18, 25, 40, 60, 90, 130, 180]}
+        lift coefficient:        [0.00, 0.80, 1.30, 1.40, 1.10, 0.90, 0.70, 0.30, 0.00]
+        drag coefficient:        [0.05, 0.08, 0.12, 0.20, 0.45, 0.75, 1.10, 1.30, 1.35]
+        calculation point in body frame:           # centre of effort, above deck (Z<0 = up)
+          x: {value: -0.10, unit: m}                # CoE DERRIÈRE la quille (x=0.03) -> léger weather
+          y: {value: 0.0,  unit: m}                 # helm (lofe) -> tenable au près (avant: 0.05 = lee helm)  # ESTIMATED
+          z: {value: -0.45, unit: m}
+        angle command: sheet                        # command key -> "mainsail(sheet)"
+
+      # ---- KEEL : hydrodynamic polar, fixed (resists leeway) ----
+      - model: hydrodynamic polar
+        name: keel
+        position of calculation frame:
+          frame: focus_v2
+          x: {value: 0.03, unit: m}
+          y: {value: 0.0,  unit: m}
+          z: {value: 0.25, unit: m}                 # underwater (Z>0) — required or zero force
+          phi:   {value: 0.0, unit: deg}
+          theta: {value: 0.0, unit: deg}
+          psi:   {value: 0.0, unit: deg}
+        reference area: {value: 0.030, unit: m^2}    # ESTIMATED — keel: leeway resistance
+        angle of attack: {unit: deg, values: [0, 5, 10, 15, 20, 30, 45, 90, 135, 180]}
+        lift coefficient:                [0.00, 0.35, 0.70, 1.00, 0.95, 0.80, 0.70, 0.00, -0.70, 0.00]
+        drag coefficient:                [0.02, 0.03, 0.05, 0.08, 0.12, 0.25, 0.50, 1.10, 0.50, 0.02]
+        take waves orbital velocity into account: false
+
+      # ---- RUDDER : hydrodynamic polar, steered ('helm') ----
+      - model: hydrodynamic polar
+        name: rudder
+        position of calculation frame:
+          frame: focus_v2
+          x: {value: -0.46, unit: m}                # at the stern
+          y: {value: 0.0,   unit: m}
+          z: {value: 0.26,  unit: m}                # underwater (mid-rudder; stays wetted at moderate heel)
+          phi:   {value: 0.0, unit: deg}
+          theta: {value: 0.0, unit: deg}
+          psi:   {value: 0.0, unit: deg}
+        reference area: {value: 0.060, unit: m^2}    # ESTIMATED — large rudder for steering authority
+        angle of attack: {unit: deg, values: [0, 5, 12, 20, 30, 45, 60, 90, 135, 180]}
+        lift coefficient:                [0.00, 0.45, 0.95, 1.25, 1.30, 1.15, 0.90, 0.00, -1.10, 0.00]
+        drag coefficient:                [0.02, 0.04, 0.08, 0.16, 0.32, 0.60, 0.85, 1.20, 0.70, 0.02]
+        take waves orbital velocity into account: false
+        angle command: helm                         # command key -> "rudder(helm)"
+
+output:
+  - format: csv
+    filename: /lab/_offline/_sa.csv
+    data: [t,
+           x(focus_v2), y(focus_v2), z(focus_v2),
+           phi(focus_v2), theta(focus_v2), psi(focus_v2),
+           u(focus_v2), v(focus_v2), w(focus_v2), r(focus_v2), 'alpha(keel,focus_v2)', 'Fy(keel,focus_v2,focus_v2)']

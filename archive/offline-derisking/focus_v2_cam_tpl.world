@@ -1,0 +1,123 @@
+<?xml version="1.0"?>
+<!-- focus_v2_demo.world + an OFFSCREEN top-down camera (headless EGL/llvmpipe
+     software render under Rosetta) that auto-saves PNG frames. Mark moved to
+     (0,12) to match ctrl_course. Used only to visualise the loop in gz; NOT a
+     PR deliverable. -->
+<sdf version="1.7">
+  <world name="lotusim">
+    <scene>
+      <ambient>1.0 1.0 1.0</ambient>
+      <background>0.55 0.7 0.9</background>
+      <grid>false</grid>
+    </scene>
+
+    <physics type="ode">
+      <max_step_size>0.05</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>20</real_time_update_rate>
+    </physics>
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>1.2421</latitude_deg>
+      <longitude_deg>103.7198</longitude_deg>
+      <elevation>0</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+
+    <gravity>0 0 0</gravity>
+
+    <plugin filename="physics_interface_plugin"
+            name="lotusim::gazebo::PhysicsInterfacePlugin"/>
+    <plugin filename="entity_manager_plugin"
+            name="lotusim::gazebo::EntityManager"/>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system"
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+      <background_color>0.55 0.7 0.9</background_color>
+    </plugin>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.95 0.95 0.95 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.4 0.3 -0.9</direction>
+    </light>
+
+    <!-- Flat sea surface (visual only). -->
+    <model name="sea">
+      <static>true</static>
+      <link name="surface">
+        <visual name="surface">
+          <geometry>
+            <plane><normal>0 0 1</normal><size>200 200</size></plane>
+          </geometry>
+          <material>
+            <ambient>0.10 0.30 0.45 1</ambient>
+            <diffuse>0.15 0.40 0.55 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Race mark (buoy) at the controller's mark (0,12). -->
+    <model name="mark">
+      <static>true</static>
+      <pose>0 12 0 0 0 0</pose>
+      <link name="buoy">
+        <visual name="buoy">
+          <geometry><cylinder><radius>0.4</radius><length>1.2</length></cylinder></geometry>
+          <material>
+            <ambient>0.9 0.35 0.0 1</ambient>
+            <diffuse>1.0 0.45 0.0 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Offscreen top-down camera: above the course centre, looking straight
+         down (pitch +90deg so the camera +X view axis points to -Z). Frames are
+         saved to /lab/_offline/frames/. -->
+    <model name="cam_rig">
+      <static>true</static>
+      <pose>7.5 7.5 30 0 1.5708 1.5708</pose>
+      <link name="cam_link">
+        <sensor name="topcam" type="camera">
+          <always_on>1</always_on>
+          <update_rate>1.5</update_rate>
+          <topic>topcam</topic>
+          <camera>
+            <horizontal_fov>1.15</horizontal_fov>
+            <image><width>840</width><height>840</height></image>
+            <clip><near>0.2</near><far>200</far></clip>
+            <save enabled="true"><path>/lab/_offline/frames</path></save>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+
+    <include>
+      <uri>model://focus_v2</uri>
+      <name>focus_v2</name>
+      <pose>0 0 0 0 0 0</pose>
+      <lotus_param>
+        <physics_engine_interface>
+          <surface>
+            <connection_type>XDynWebSocket</connection_type>
+            <uri>ws://127.0.0.1:12345</uri>
+            <control_surfaces>
+              <sail>mainsail(sheet)</sail>
+              <rudder>rudder(helm)</rudder>
+            </control_surfaces>
+          </surface>
+          <init_state>Surface</init_state>
+        </physics_engine_interface>
+      </lotus_param>
+    </include>
+  </world>
+</sdf>

@@ -8,3 +8,8 @@ the FBX/OBJ meshes used by gz (`assets/models/regatta_buoy/`) and Unity
 
 `focus_v2.blend` is a working copy; the model may later migrate to the
 LOTUSim upstream core alongside the `focus_v2` xdyn model.
+
+`focus_v2_wood_mahogany.png` is a texture referenced by `focus_v2.blend`; open
+focus_v2.blend then File > External Data > Make Paths Relative — the texture
+path is currently absolute. `focus_v2.baseline.blend` is a historical reference
+copy.

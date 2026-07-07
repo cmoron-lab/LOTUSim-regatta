@@ -1,0 +1,7 @@
+commands:
+  - name: mainsail
+    t: [0.0]
+    sheet: {unit: deg, values: [25]}
+  - name: rudder
+    t: [0.0]
+    helm: {unit: deg, values: [0]}
