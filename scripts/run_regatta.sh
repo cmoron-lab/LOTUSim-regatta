@@ -60,9 +60,11 @@ s = re.sub(r"(u:\s*\{value:\s*)0\.0(, unit: m/s\})", r"\g<1>0.8\g<2>", s, count=
 open("/lab/LOTUSim-regatta/offline/_regatta_model.yaml", "w").write(s)
 PY
     chmod +x /lab/LOTUSim/physics/xdyn-for-cs 2>/dev/null || true
-    # xdyn co-sim: fine internal --dt (decoupling rule), rk4 mandatory (monotonic clock):
+    # xdyn co-sim: --dt 0.005 = the physics-proven step (offline de-risking + oracle),
+    # 2 substeps per 0.01 comm step. One rk4 substep costs ~3.1 ms under Rosetta, so
+    # --dt drives the RTF ceiling (0.001 capped RTF at ~0.3; 0.005 reaches ~1.0).
     ( cd /lab/LOTUSim/assets/models && LD_LIBRARY_PATH=/lab/LOTUSim/physics \
-      /lab/LOTUSim/physics/xdyn-for-cs "$MODEL" -s rk4 --dt 0.001 -a 127.0.0.1 -p 12345 \
+      /lab/LOTUSim/physics/xdyn-for-cs "$MODEL" -s rk4 --dt 0.005 -a 127.0.0.1 -p 12345 \
       ) > /tmp/xdyn.log 2>&1 & XPID=$!
     sleep 4
     WORLD=/lab/LOTUSim-regatta/assets/worlds/regatta.world

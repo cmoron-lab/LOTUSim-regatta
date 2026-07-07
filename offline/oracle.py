@@ -40,8 +40,10 @@ def run_lap(wind_dir_deg=180, marks=((15.0, 0.0), (0.0, 0.0)), dt=0.001, comm_dt
 
 if __name__ == "__main__":
     comm_dt = float(os.environ.get("COMM_DT", 0.005))
-    reached, tacks, traj = run_lap(comm_dt=comm_dt)
-    print(f"comm_dt {comm_dt} | marks reached {reached}/2 | tacks {tacks} | dur {traj[-1]['t']:.0f}s")
+    xdyn_dt = float(os.environ.get("XDYN_DT", 0.001))
+    reached, tacks, traj = run_lap(dt=xdyn_dt, comm_dt=comm_dt)
+    print(f"xdyn_dt {xdyn_dt} | comm_dt {comm_dt} | marks reached {reached}/2 "
+          f"| tacks {tacks} | dur {traj[-1]['t']:.0f}s")
     assert reached >= 2, f"lap incomplete: only {reached}/2 marks"
     assert tacks >= 1, f"no tack performed (tacks={tacks})"
     print("ORACLE PASS")
