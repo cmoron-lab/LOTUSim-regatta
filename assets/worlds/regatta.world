@@ -84,7 +84,8 @@
       <!-- gz ENU spawn yaw 30deg = NED heading 60deg = close-hauled on starboard (wind from
            North). The physics plugin seeds xdyn's initial orientation from this gz pose, so the
            boat must start on a sailing angle, not bow-to-wind (else it stalls in irons). -->
-      <pose>0 0 0 0 0 0.5236</pose>
+      <!-- 2 m South (ENU y=-2) of the leeward mark: start behind the line, not on the buoy. -->
+      <pose>0 -2 0 0 0 0.5236</pose>
 
       <lotus_param>
         <physics_engine_interface>
