@@ -8,9 +8,11 @@
 #   Unity to connect before starting xdyn/gz/helmsman -- image has ros_tcp_endpoint
 #   built in (colcon build --packages-select ros_tcp_endpoint, vendored from
 #   LOTUSim-Unity-modules/Submodules/ROS-TCP-Endpoint).
+# IMAGE=<tag>: run against an alternative image (e.g. a rebuild not yet promoted).
 set -u
 DUR=${1:-120}
 MODE=${2:-hold}
+IMAGE=${IMAGE:-lotusim:focus-v2}
 # Ctrl-C must kill the container: in-container bash is PID1 and ignores SIGINT,
 # so the EXIT cleanup trap never fires without this host-side backstop.
 trap 'docker rm -f regatta >/dev/null 2>&1' INT TERM
@@ -20,7 +22,7 @@ docker run --rm --platform linux/amd64 --name regatta -v ~/src/lotusim-lab:/lab 
   $UNITY_PORT \
   -e DUR="$DUR" -e MODE="$MODE" -e HELM_TEST="${HELM_TEST:-}" -e WS_TAP="${WS_TAP:-}" \
   -e UNITY="${UNITY:-}" \
-  lotusim:focus-v2 bash -lc '
+  "$IMAGE" bash -lc '
     XPID= GPID= HPID= WPID= EPID=   # ROS setup.bash is not set -u safe; do not enable set -u here
     cleanup(){ kill -9 $XPID $GPID $HPID $WPID $EPID 2>/dev/null; }  # gz ignores SIGTERM -> SIGKILL
     trap cleanup EXIT
