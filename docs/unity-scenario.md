@@ -52,6 +52,23 @@ Source of truth is `unity/*.cs` in **this** repo; deployed copies live at
 - `RegattaCameraRig` — chase / orbit / onboard / free-FPS modes, cycled with
   `C`; RMB-drag to look around, wheel to zoom/adjust speed.
 
+## Standalone player (no editor)
+
+`Assets/Editor/BuildRegatta.cs` builds a native arm64 `Builds/Regatta.app`
+(menu `LOTUSim > Build Regatta (macOS)`, or headless — editor must be closed):
+
+```bash
+/Applications/Unity/Hub/Editor/2022.3.62f2/Unity.app/Contents/MacOS/Unity \
+  -batchmode -quit -projectPath LOTUSim-Unity-modules \
+  -executeMethod BuildRegatta.Build -logFile /tmp/unity_build.log
+```
+
+First build ≈ 11 min (HDRP shader variants), then cached. Run flow is the same
+as the editor: start the stack (`UNITY=1 run_regatta.sh 900 hold`), then open
+`Regatta.app` instead of pressing Play. Trap: editor-only code outside an
+`Editor/` folder compiles in the editor but breaks player builds (CS0246) —
+`LotusimConnectorEditor.cs` carries the `#if UNITY_EDITOR` guard for this.
+
 ## Launch order
 
 ```bash

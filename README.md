@@ -74,7 +74,8 @@ both marks (`scripts/smoke_rounds_marks.py`, a gz pose oracle).
 UNITY=1 timeout 1000 bash scripts/run_regatta.sh 900 hold
 ```
 
-Then open the Regatta scene in `LOTUSim-Unity-modules` and press Play — see
+Then open `LOTUSim-Unity-modules/Builds/Regatta.app` (standalone player), or the
+Regatta scene in the editor and press Play — see
 `docs/unity-scenario.md` for how to (re)build that scene.
 
 ## Prerequisites
