@@ -1,8 +1,11 @@
 # Unity Regatta scenario — build recipe
 
-The Regatta scene is **not committed** (a `.unity` scene is a poor diff target
-and the scripts/assets it depends on already are). This doc is the source of
-truth to rebuild it from scratch in the Unity editor.
+The Regatta scene and everything it depends on (boat/buoy assets, Addressable
+entry, deployed scripts) are committed on `feature/regatta-scenario` — the
+Unity repo **must be on that branch**: on `main` the scene may still open from
+a stray working-tree copy, but the `focus_v2` Addressable key does not exist
+and the bridge fails at spawn with `InvalidKeyException`. This doc remains the
+recipe to rebuild the scene from scratch if needed.
 
 - Project: `LOTUSim-Unity-modules` (fork `cmoron-lab`), Unity `2022.3.62f2`, HDRP.
 - Branch: `feature/regatta-scenario`.

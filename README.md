@@ -81,19 +81,24 @@ Then open the Regatta scene in `LOTUSim-Unity-modules` and press Play — see
 
 Runtime is **Docker only** (this project is developed on Apple Silicon;
 `--platform linux/amd64` via Rosetta, RTF ≈ 1.0 with the current step config).
-Everything runs inside `lotusim:focus-v2`, a base LOTUSim image with two layers
-added on top by `docker commit`: a rebuilt `physics_engine_interface` plugin
-(the upstream fixes below) and `ros_tcp_endpoint` (for the Unity bridge).
-Rebuild recipe, run once inside a throwaway container of the base image:
+Everything runs inside `lotusim:focus-v2`, built from the post-#36 upstream
+`main` (all three physics fixes below are merged) plus the lab branches
+(`LOTUSim@integration/post36`: focus_v2 assets + control-surfaces seeding) and
+`ros_tcp_endpoint` (for the Unity bridge). Rebuild recipe, run once inside a
+throwaway container of the previous image:
 
 ```bash
-# 1. copy the patched source in (physics_engine_interface and/or ros_tcp_endpoint)
-docker cp <source>/. <container>:/lotusim_ws/src/<package>/
-# 2. build it IN THE SAME container the image is committed from
+# 1. replace the whole source tree (packages get renamed upstream; overlaying
+#    would leave dead ones behind), from the integration branch
+docker exec <container> rm -rf /lotusim_ws/src/LOTUSim
+git -C LOTUSim archive integration/post36 | docker cp - <container>:/lotusim_ws/src/LOTUSim
+# 2. build IN THE SAME container the image is committed from
+#    (radar_sensor needs: apt-get install -y ros-jazzy-radar-msgs)
 docker exec <container> bash -lc \
   'source /opt/ros/jazzy/setup.bash && cd /lotusim_ws && \
-   colcon build --packages-select <package> --merge-install'
-# 3. freeze the layer
+   colcon build --merge-install'
+# 3. freeze the layer -- docker commit KEEPS the container entrypoint: create
+#    the container without --entrypoint or restore ENTRYPOINT ["/ros_entrypoint.sh"]
 docker commit <container> lotusim:focus-v2
 ```
 
@@ -128,9 +133,9 @@ integration quality (oracle unchanged: 2/2 marks, 3 tacks).
 
 | Issue / PR | Fix | Status |
 |---|---|---|
-| [#27](https://github.com/naval-group/LOTUSim/issues/27) / [#28](https://github.com/naval-group/LOTUSim/pull/28) | xdyn quaternion `j`/`k` swapped on receive — pre-existing, invisible at identity attitude | fixed upstream (PR open) |
-| [#32](https://github.com/naval-group/LOTUSim/issues/32) / [#33](https://github.com/naval-group/LOTUSim/pull/33) | NED↔ENU attitude conversion missing the FLU↔FRD body-frame swap — root cause of the boat not holding a beat | fixed upstream (PR open) |
-| [#34](https://github.com/naval-group/LOTUSim/issues/34) / [#35](https://github.com/naval-group/LOTUSim/pull/35) | co-sim `t` carried the step duration in ms instead of absolute sim time — freezes any time-dependent forcing (waves); prerequisite for swell | fixed upstream (PR open) |
+| [#27](https://github.com/naval-group/LOTUSim/issues/27) / [#28](https://github.com/naval-group/LOTUSim/pull/28) | xdyn quaternion `j`/`k` swapped on receive — pre-existing, invisible at identity attitude | merged upstream 2026-07-13 |
+| [#32](https://github.com/naval-group/LOTUSim/issues/32) / [#33](https://github.com/naval-group/LOTUSim/pull/33) | NED↔ENU attitude conversion missing the FLU↔FRD body-frame swap — root cause of the boat not holding a beat | merged upstream 2026-07-13 |
+| [#34](https://github.com/naval-group/LOTUSim/issues/34) / [#35](https://github.com/naval-group/LOTUSim/pull/35) | co-sim `t` carried the step duration in ms instead of absolute sim time — freezes any time-dependent forcing (waves); prerequisite for swell | merged upstream 2026-07-13 |
 
 ## Repo map
 
