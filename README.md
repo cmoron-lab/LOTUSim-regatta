@@ -52,21 +52,27 @@ is the reference the full stack is checked against.
 
 ```bash
 cd offline && python3 oracle.py
-# xdyn_dt 0.001 | comm_dt 0.005 | marks reached 2/2 | tacks 3 | dur 161s
+# xdyn_dt 0.001 | comm_dt 0.005 | marks reached 2/2 | tacks 3 | dur 160s
 # ORACLE PASS
 ```
+
+It drives `$LOTUSIM_PATH/physics/xdyn-for-cs` directly, so the LOTUSim environment
+must be sourced — `install.sh` puts it in `~/.bashrc`.
 
 Knobs: env `COMM_DT` / `XDYN_DT` to A/B the step sizes.
 
 ### 2. Headless smoke gate (full gz co-sim stack)
 
 ```bash
-timeout 450 bash scripts/run_regatta.sh 300 smoke
+./scripts/run_regatta.sh 300 smoke
 # ... SMOKE PASS
 ```
 
-Brings up xdyn → helmsman → gz headless in Docker and asserts the boat rounds
-both marks (`scripts/smoke_rounds_marks.py`, a gz pose oracle).
+Brings up xdyn → helmsman → gz headless and asserts the boat rounds both marks
+(`scripts/smoke_rounds_marks.py`, a gz pose oracle). The argument is a budget in
+**simulated** seconds, not wall seconds: the verdict must not depend on how fast
+the machine is. It refuses to start if anything is already publishing on the
+world's topics — two simulations on one topic make the gate believe either boat.
 
 ### 3. Unity (rendered)
 
@@ -80,8 +86,25 @@ Regatta scene in the editor and press Play — see
 
 ## Prerequisites
 
-Runtime is **Docker only** (this project is developed on Apple Silicon;
-`--platform linux/amd64` via Rosetta, RTF ≈ 1.0 with the current step config).
+### Ubuntu 24.04, including WSL2 — the reference platform
+
+```bash
+./install.sh          # then open a new shell
+```
+
+It clones `LOTUSim@regatta-base` into `~/lotusim_ws`, installs ROS 2 Jazzy and
+Gazebo Harmonic, builds the core, builds this repository as a colcon **overlay**
+in place, and writes the environment to `~/.bashrc`. The scenario assets are
+never copied into the core: they reach gz through `lotusim --assets-path`.
+
+Requirements: Ubuntu 24.04 (Jazzy) and x86-64 — the shipped `physics/xdyn-for-cs`
+is an x86-64 binary.
+
+### macOS — Docker
+
+ROS and gz do not run natively on Apple Silicon, so the same stack runs in a
+container under Rosetta (`--platform linux/amd64`); `scripts/run_regatta.sh`
+detects the platform and wraps itself, or force it with `RUNNER=docker`.
 Everything runs inside `lotusim:focus-v2`, built from `LOTUSim@regatta-base`
 (upstream `new_main`, where the physics fixes below are merged, plus the focus_v2
 model, the patched xdyn binaries and the composable `--assets-path`) and
@@ -105,17 +128,21 @@ docker commit <container> lotusim:focus-v2
 
 ## Performance
 
-Wall-clock durations in the scripts above ARE the sim duration — Rosetta RTF
-is well below hardware-native.
+| Config | comm step | xdyn `--dt` | RTF (Rosetta, Apple Silicon) | RTF (native x86-64) |
+|---|---|---|---|---|
+| baseline | 0.005 | 0.001 | ≈ 0.26 | ≈ 0.39 |
+| current | 0.01 | 0.005 | ≈ 1.01 | ≈ 1.0 |
 
-| Config | comm step | xdyn `--dt` | RTF (Rosetta) |
-|---|---|---|---|
-| baseline | 0.005 | 0.001 | ≈ 0.26 |
-| current | 0.01 | 0.005 | ≈ 1.01 |
+Native is **not** the 3-4× the port assumed: one rk4 substep costs ≈ 2.4 ms on a
+Ryzen 7 5800X against ≈ 3.1 ms under Rosetta, a 1.3× gain. The cost is in the
+substep, not in the websocket round trip (≈ 1.3 ms fixed), so there is nothing to
+win by batching communication. Full figures and method:
+`docs/measurements/2026-07-WSL.md`.
 
-One rk4 substep costs ≈ 3.1 ms under Rosetta — it is what set the ceiling;
-widening both steps to the values above removed it without touching
-integration quality (oracle unchanged: 2/2 marks, 3 tacks).
+The smoke gate takes its budget in **simulated** seconds for exactly this reason:
+RTF varies with the machine, and it must change how long you wait, never the
+verdict. A full lap is ≈ 170 simulated seconds (the offline oracle needs ≈ 160,
+starting with way on rather than from rest).
 
 ## Debug tooling
 
@@ -142,13 +169,16 @@ integration quality (oracle unchanged: 2/2 marks, 3 tacks).
 
 ```
 LOTUSim-regatta/
+├── install.sh                # Ubuntu 24.04 bring-up: core + this repo as an overlay
 ├── offline/                  # websocket physics oracle (ws.py, oracle.py, probe_helm.py)
 ├── src/regatta_agents/       # ROS2 package: pilot.py (brain) + helmsman.py (ROS node)
 ├── assets/{worlds,models}/   # regatta.world, regatta_buoy model
+├── assets/conditions/        # scenario wind, layered onto the core model by xdyn
 ├── assets/blend/             # Blender sources (buoy, boat)
 ├── unity/                    # C# scripts deployed into LOTUSim-Unity-modules
-├── scripts/                  # run_regatta.sh, smoke_rounds_marks.py, ws_tap.py
-└── docs/                     # design, plans, HANDOFF, unity-scenario.md
+├── scripts/                  # run_regatta.sh (entry point) + regatta_stack.sh (the
+│                             #   sequence), smoke_rounds_marks.py, ws_tap.py
+└── docs/                     # design, plans, measurements, HANDOFF, unity-scenario.md
 ```
 
 - Design: `docs/design/2026-07-06-regatta-mvp-design.md`
