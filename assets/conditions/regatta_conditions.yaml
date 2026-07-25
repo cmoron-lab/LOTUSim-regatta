@@ -1,0 +1,15 @@
+# Scenario conditions for the windward-leeward lap: a steady breeze from the
+# north. Layered onto the core focus_v2 model, which keeps its own demo breeze
+# for the core demo world.
+#
+# The whole section is restated on purpose. xdyn accepts several YAML files but
+# REPLACES a top-level section with the last file's version instead of merging
+# it, so a file carrying only the wind would drop 'no waves' and xdyn would
+# refuse to start: "Force model 'non-linear hydrostatic (fast)' needs a wave
+# model". Measured in docs/measurements/2026-07-WSL.md.
+environment models:
+  - model: no waves
+    constant sea elevation in NED frame: {value: 0.0, unit: m}
+  - model: uniform wind
+    velocity:  {unit: m/s, value: 3.0}
+    direction: {unit: deg, value: 180.0}   # compass bearing the wind blows TOWARD
