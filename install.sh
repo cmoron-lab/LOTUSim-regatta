@@ -38,14 +38,10 @@ source "$REGATTA_ROOT/install/setup.bash"
 set -u
 ok "overlay built"
 
-grep -q 'LOTUSIM_WS' ~/.bashrc || cat >> ~/.bashrc <<EOF
-
-# LOTUSim regatta
-export LOTUSIM_WS="$LOTUSIM_WS"
-export LOTUSIM_PATH="\$LOTUSIM_WS/src/LOTUSim"
-export PATH="\$LOTUSIM_PATH/launch:\$PATH"
-source "\$LOTUSIM_WS/install/setup.bash"
-source "$REGATTA_ROOT/install/setup.bash"
-source "\$LOTUSIM_PATH/launch/bash_completion.sh"
-EOF
-ok "environment written to ~/.bashrc -- open a new shell"
+# Deliberately NOT written to ~/.bashrc: the user's interactive shell is theirs,
+# and half of them run zsh, where the ROS setup.bash files break outright.
+ok "done. To use it in a shell (bash or zsh):"
+echo "    . $REGATTA_ROOT/env.sh"
+echo
+echo "  The harness sources it on its own, so this works from a bare shell:"
+echo "    $REGATTA_ROOT/scripts/run_regatta.sh 300 smoke"

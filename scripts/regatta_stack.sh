@@ -15,13 +15,19 @@ DUR=${1:-120}
 MODE=${2:-hold}
 REGATTA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-: "${LOTUSIM_PATH:?source the LOTUSim environment first}"
-# Non-empty is not enough: a half-built environment yields a plausible-looking
+# Run from a bare shell without ceremony: set the environment up ourselves when it
+# is not already there. This script is bash, so env.sh picks the .bash flavours --
+# the caller's own shell, zsh included, is never involved.
+if [ -z "${LOTUSIM_PATH:-}" ] || ! command -v lotusim > /dev/null 2>&1; then
+  [ -f "$REGATTA_ROOT/env.sh" ] || { echo "[!] $REGATTA_ROOT/env.sh is missing"; exit 1; }
+  . "$REGATTA_ROOT/env.sh"
+fi
+# Being set is not enough: a half-built environment yields a plausible-looking
 # path that fails 40s later as "no pose received" instead of as a bad setup.
 [ -x "$LOTUSIM_PATH/physics/xdyn-for-cs" ] || {
   echo "[!] LOTUSIM_PATH=$LOTUSIM_PATH holds no physics/xdyn-for-cs -- run install.sh"; exit 1; }
 command -v lotusim > /dev/null || {
-  echo "[!] lotusim is not on PATH -- source the environment (install.sh writes it to ~/.bashrc)"; exit 1; }
+  echo "[!] lotusim is not on PATH -- run install.sh, or . $REGATTA_ROOT/env.sh"; exit 1; }
 
 # A gz left over from an earlier run keeps publishing on the same topics: the pose
 # stream then carries two boats and the smoke gate believes whichever it sees first.

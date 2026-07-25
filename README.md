@@ -56,8 +56,8 @@ cd offline && python3 oracle.py
 # ORACLE PASS
 ```
 
-It drives `$LOTUSIM_PATH/physics/xdyn-for-cs` directly, so the LOTUSim environment
-must be sourced — `install.sh` puts it in `~/.bashrc`.
+It drives `$LOTUSIM_PATH/physics/xdyn-for-cs` directly, so the environment must be
+sourced first: `. ./env.sh`.
 
 Knobs: env `COMM_DT` / `XDYN_DT` to A/B the step sizes.
 
@@ -89,13 +89,28 @@ Regatta scene in the editor and press Play — see
 ### Ubuntu 24.04, including WSL2 — the reference platform
 
 ```bash
-./install.sh          # then open a new shell
+./install.sh
 ```
 
 It clones `LOTUSim@regatta-base` into `~/lotusim_ws`, installs ROS 2 Jazzy and
-Gazebo Harmonic, builds the core, builds this repository as a colcon **overlay**
-in place, and writes the environment to `~/.bashrc`. The scenario assets are
-never copied into the core: they reach gz through `lotusim --assets-path`.
+Gazebo Harmonic, builds the core, and builds this repository as a colcon
+**overlay** in place. The scenario assets are never copied into the core: they
+reach gz through `lotusim --assets-path`.
+
+**It writes nothing to `~/.bashrc` or `~/.zshrc`** — an interactive shell belongs
+to its user. The environment lives in `env.sh`, which works in **bash and zsh**
+(the ROS `setup.bash` files break outright under zsh, so it picks the right
+flavour):
+
+```bash
+. ./env.sh            # only needed for ros2/gz/colcon commands typed by hand
+```
+
+The harness sources it by itself, so this needs no setup at all:
+
+```bash
+./scripts/run_regatta.sh 300 smoke
+```
 
 Requirements: Ubuntu 24.04 (Jazzy) and x86-64 — the shipped `physics/xdyn-for-cs`
 is an x86-64 binary.
@@ -170,6 +185,7 @@ starting with way on rather than from rest).
 ```
 LOTUSim-regatta/
 ├── install.sh                # Ubuntu 24.04 bring-up: core + this repo as an overlay
+├── env.sh                    # the environment, sourceable from bash or zsh
 ├── offline/                  # websocket physics oracle (ws.py, oracle.py, probe_helm.py)
 ├── src/regatta_agents/       # ROS2 package: pilot.py (brain) + helmsman.py (ROS node)
 ├── assets/{worlds,models}/   # regatta.world, regatta_buoy model
