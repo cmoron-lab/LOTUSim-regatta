@@ -16,9 +16,35 @@ MODE=${2:-hold}
 REGATTA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 : "${LOTUSIM_PATH:?source the LOTUSim environment first}"
+# Non-empty is not enough: a half-built environment yields a plausible-looking
+# path that fails 40s later as "no pose received" instead of as a bad setup.
+[ -x "$LOTUSIM_PATH/physics/xdyn-for-cs" ] || {
+  echo "[!] LOTUSIM_PATH=$LOTUSIM_PATH holds no physics/xdyn-for-cs -- run install.sh"; exit 1; }
+command -v lotusim > /dev/null || {
+  echo "[!] lotusim is not on PATH -- source the environment (install.sh writes it to ~/.bashrc)"; exit 1; }
+
+# A gz left over from an earlier run keeps publishing on the same topics: the pose
+# stream then carries two boats and the smoke gate believes whichever it sees first.
+# It passed that way once. Refuse to start rather than produce a verdict about the
+# wrong simulation.
+# Ask gz, not the process table: `pgrep -f "gz sim"` matches any shell whose command
+# line happens to contain that text, starting with the one that launched this script.
+if timeout 10 gz topic -l 2>/dev/null | grep -q "^/world/lotusim/"; then
+  echo "[!] something already publishes /world/lotusim topics -- a leftover run?"
+  echo "[!] the pose stream would carry two boats. Stop it, then retry."
+  exit 1
+fi
 
 XPID= GPID= HPID= WPID= EPID=
-cleanup(){ kill -9 $XPID $GPID $HPID $WPID $EPID 2>/dev/null; }  # gz ignores SIGTERM
+# `lotusim run` spawns gz as a CHILD, so killing $GPID alone orphans it (the old
+# harness ran gz directly, where that was the same process). Kill the tree,
+# deepest first, and with -9: gz ignores SIGTERM.
+kill_tree(){
+  local p
+  for p in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$p"; done
+  kill -9 "$1" 2>/dev/null
+}
+cleanup(){ local p; for p in $XPID $GPID $HPID $WPID $EPID; do kill_tree "$p"; done; }
 trap cleanup EXIT
 
 if [ -n "${UNITY:-}" ]; then
@@ -37,9 +63,12 @@ if [ -n "${UNITY:-}" ]; then
 fi
 
 # xdyn co-sim. --dt 0.005 is the physics-proven step (0.02 diverges): do not tune it.
+# Two YAML files: the core vessel model, then the scenario conditions, whose
+# environment section replaces the core's demo breeze.
 MODEL="$LOTUSIM_PATH/assets/models/focus_v2/focus_v2.yaml"
+CONDITIONS="$REGATTA_ROOT/assets/conditions/regatta_conditions.yaml"
 ( cd "$LOTUSIM_PATH/assets/models" && LD_LIBRARY_PATH="$LOTUSIM_PATH/physics" \
-  "$LOTUSIM_PATH/physics/xdyn-for-cs" "$MODEL" \
+  "$LOTUSIM_PATH/physics/xdyn-for-cs" "$MODEL" "$CONDITIONS" \
   -s rk4 --dt 0.005 -a 127.0.0.1 -p 12345 ) > /tmp/xdyn.log 2>&1 & XPID=$!
 sleep 4
 
