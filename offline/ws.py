@@ -7,7 +7,16 @@ Co-sim rule: rkck is forbidden (monotonic clock) -> rk4. Launch with a fine --dt
 and, for maneuvers, communicate no faster than needed (effective step = min(--dt,
 Dt)). xdyn convention (verified): quaternion (qr,qi,qj,qk) = attitude body->NED;
 velocities (u,v,w),(p,q,r) = body frame; position (x,y,z) = NED."""
-import base64, json, math, os, re, socket, struct, subprocess, time
+
+import base64
+import json
+import math
+import os
+import re
+import socket
+import struct
+import subprocess
+import time
 
 LAB = os.path.expanduser("~/src/lotusim-lab")
 IMAGE = "lotusim:focus-v2"
@@ -19,12 +28,20 @@ C_MESH = "/lab/LOTUSim/assets/models/focus_v2/meshes/focus_v2.stl"
 def write_model(wind_dir_deg, wind_speed=None):
     """Write a temp model yaml with the requested wind direction and an absolute mesh path."""
     src = open(MODEL_SRC).read()
-    src, n = re.subn(r"(direction:\s*\{unit:\s*deg,\s*value:\s*)[-\d.]+",
-                     rf"\g<1>{wind_dir_deg}", src, count=1)
+    src, n = re.subn(
+        r"(direction:\s*\{unit:\s*deg,\s*value:\s*)[-\d.]+",
+        rf"\g<1>{wind_dir_deg}",
+        src,
+        count=1,
+    )
     assert n == 1, "wind direction not found in model yaml"
     if wind_speed is not None:
-        src = re.sub(r"(velocity:\s*\{unit:\s*m/s,\s*value:\s*)[-\d.]+",
-                     rf"\g<1>{wind_speed}", src, count=1)
+        src = re.sub(
+            r"(velocity:\s*\{unit:\s*m/s,\s*value:\s*)[-\d.]+",
+            rf"\g<1>{wind_speed}",
+            src,
+            count=1,
+        )
     src = re.sub(r"^(\s*mesh:\s*)\S+\.stl", rf"\g<1>{C_MESH}", src, count=1, flags=re.M)
     open(f"{OFF}/_cosim_model.yaml", "w").write(src)
 
@@ -33,9 +50,11 @@ def write_model(wind_dir_deg, wind_speed=None):
 def ws_connect(host, port, path="/", timeout=10):
     s = socket.create_connection((host, port), timeout=timeout)
     key = base64.b64encode(os.urandom(16)).decode()
-    req = (f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\n"
-           "Upgrade: websocket\r\nConnection: Upgrade\r\n"
-           f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n")
+    req = (
+        f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\n"
+        "Upgrade: websocket\r\nConnection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    )
     s.sendall(req.encode())
     buf = b""
     while b"\r\n\r\n" not in buf:
@@ -66,9 +85,11 @@ def ws_send(s, text):
     if n < 126:
         hdr.append(0x80 | n)
     elif n < 65536:
-        hdr.append(0x80 | 126); hdr += struct.pack(">H", n)
+        hdr.append(0x80 | 126)
+        hdr += struct.pack(">H", n)
     else:
-        hdr.append(0x80 | 127); hdr += struct.pack(">Q", n)
+        hdr.append(0x80 | 127)
+        hdr += struct.pack(">Q", n)
     hdr += mask
     s.sendall(bytes(hdr) + bytes(b ^ mask[i % 4] for i, b in enumerate(p)))
 
@@ -98,14 +119,37 @@ def ws_recv(s):
 def launch_xdyn(port=12345, solver="rk4", dt=0.005, name="regatta_cosim"):
     """Launch xdyn-for-cs in Docker. `dt` = INTERNAL integration step (--dt). rk4 mandatory."""
     subprocess.run(["docker", "rm", "-f", name], capture_output=True)
-    inner = ("chmod +x /lab/LOTUSim/physics/xdyn-for-cs 2>/dev/null; "
-             f"/lab/LOTUSim/physics/xdyn-for-cs /lab/LOTUSim-regatta/offline/_cosim_model.yaml "
-             f"-s {solver} --dt {dt} -a 0.0.0.0 -p {port}")
+    inner = (
+        "chmod +x /lab/LOTUSim/physics/xdyn-for-cs 2>/dev/null; "
+        f"/lab/LOTUSim/physics/xdyn-for-cs /lab/LOTUSim-regatta/offline/_cosim_model.yaml "
+        f"-s {solver} --dt {dt} -a 0.0.0.0 -p {port}"
+    )
     subprocess.run(
-        ["docker", "run", "-d", "--rm", "--name", name, "--platform", "linux/amd64",
-         "-p", f"{port}:{port}", "-v", f"{LAB}:/lab", "-w", "/lab/LOTUSim/assets/models",
-         "-e", "LD_LIBRARY_PATH=/lab/LOTUSim/physics", IMAGE, "bash", "-lc", inner],
-        check=True, capture_output=True)
+        [
+            "docker",
+            "run",
+            "-d",
+            "--rm",
+            "--name",
+            name,
+            "--platform",
+            "linux/amd64",
+            "-p",
+            f"{port}:{port}",
+            "-v",
+            f"{LAB}:/lab",
+            "-w",
+            "/lab/LOTUSim/assets/models",
+            "-e",
+            "LD_LIBRARY_PATH=/lab/LOTUSim/physics",
+            IMAGE,
+            "bash",
+            "-lc",
+            inner,
+        ],
+        check=True,
+        capture_output=True,
+    )
     return name
 
 
@@ -113,8 +157,22 @@ def stop_xdyn(name="regatta_cosim"):
     subprocess.run(["docker", "rm", "-f", name], capture_output=True)
 
 
-INIT = {"t": 0.0, "x": 0.0, "y": 0.0, "z": 0.0, "qi": 0.0, "qj": 0.0, "qk": 0.0,
-        "qr": 1.0, "u": 0.0, "v": 0.0, "w": 0.0, "p": 0.0, "q": 0.0, "r": 0.0}
+INIT = {
+    "t": 0.0,
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0,
+    "qi": 0.0,
+    "qj": 0.0,
+    "qk": 0.0,
+    "qr": 1.0,
+    "u": 0.0,
+    "v": 0.0,
+    "w": 0.0,
+    "p": 0.0,
+    "q": 0.0,
+    "r": 0.0,
+}
 FIELDS = ("t", "x", "y", "z", "qi", "qj", "qk", "qr", "u", "v", "w", "p", "q", "r")
 
 
@@ -128,14 +186,21 @@ def _wslog(direction, msg):
         return
     if _LOGF is None:
         _LOGF = open(path, "w", buffering=1)
-    _LOGF.write(json.dumps({"ts": time.time(), "dir": direction, "msg": msg},
-                            separators=(",", ":")) + "\n")
+    _LOGF.write(
+        json.dumps(
+            {"ts": time.time(), "dir": direction, "msg": msg}, separators=(",", ":")
+        )
+        + "\n"
+    )
 
 
 def step(sock, state, sheet_rad, helm_rad, dt):
-    req = {"Dt": dt, "states": [state],
-           "commands": {"mainsail(sheet)": sheet_rad, "rudder(helm)": helm_rad},
-           "requested_output": []}
+    req = {
+        "Dt": dt,
+        "states": [state],
+        "commands": {"mainsail(sheet)": sheet_rad, "rudder(helm)": helm_rad},
+        "requested_output": [],
+    }
     _wslog("c2x", req)
     ws_send(sock, json.dumps(req))
     reply_text = ws_recv(sock)
