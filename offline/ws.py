@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Websocket + Docker helpers to drive xdyn-for-cs directly (no gz/ROS), migrated
-from _offline/cosim.py. The control brain lives in regatta_agents.pilot; this file
+"""Websocket helpers to drive xdyn-for-cs directly (no gz/ROS), migrated from
+_offline/cosim.py. The control brain lives in regatta_agents.pilot; this file
 is pure transport + the proven xdyn co-sim conventions.
+
+Nothing here is regatta-specific: it speaks xdyn's co-simulation API, the same
+one the gz physics_interface_plugin uses. It is a second client of that API for
+testing, never a bypass of the production path.
 
 Co-sim rule: rkck is forbidden (monotonic clock) -> rk4. Launch with a fine --dt
 and, for maneuvers, communicate no faster than needed (effective step = min(--dt,
@@ -18,11 +22,19 @@ import struct
 import subprocess
 import time
 
-LAB = os.path.expanduser("~/src/lotusim-lab")
-IMAGE = "lotusim:focus-v2"
-MODEL_SRC = f"{LAB}/LOTUSim/assets/models/focus_v2/focus_v2.yaml"
-OFF = f"{LAB}/LOTUSim-regatta/offline"
-C_MESH = "/lab/LOTUSim/assets/models/focus_v2/meshes/focus_v2.stl"
+# Core assets and the xdyn binaries come from the installed LOTUSim; repo-local
+# paths come from this file's location. Neither depends on a checkout layout.
+LOTUSIM_PATH = os.environ.get("LOTUSIM_PATH", "")
+if not LOTUSIM_PATH:
+    raise RuntimeError("LOTUSIM_PATH is unset -- source the LOTUSim environment first")
+REGATTA_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+MODEL_SRC = f"{LOTUSIM_PATH}/assets/models/focus_v2/focus_v2.yaml"
+OFF = f"{REGATTA_ROOT}/offline"
+# Absolute mesh path for the temp model: xdyn resolves it relative to its cwd
+# otherwise, and the cwd differs between the offline and gz paths.
+MESH = f"{LOTUSIM_PATH}/assets/models/focus_v2/meshes/focus_v2.stl"
+XDYN_LOG = "/tmp/xdyn_offline.log"  # where a failed launch explains itself
 
 
 def write_model(wind_dir_deg, wind_speed=None):
@@ -42,7 +54,7 @@ def write_model(wind_dir_deg, wind_speed=None):
             src,
             count=1,
         )
-    src = re.sub(r"^(\s*mesh:\s*)\S+\.stl", rf"\g<1>{C_MESH}", src, count=1, flags=re.M)
+    src = re.sub(r"^(\s*mesh:\s*)\S+\.stl", rf"\g<1>{MESH}", src, count=1, flags=re.M)
     open(f"{OFF}/_cosim_model.yaml", "w").write(src)
 
 
@@ -116,45 +128,73 @@ def ws_recv(s):
 
 
 # ---------- launch / step ----------
-def launch_xdyn(port=12345, solver="rk4", dt=0.005, name="regatta_cosim"):
-    """Launch xdyn-for-cs in Docker. `dt` = INTERNAL integration step (--dt). rk4 mandatory."""
-    subprocess.run(["docker", "rm", "-f", name], capture_output=True)
-    inner = (
-        "chmod +x /lab/LOTUSim/physics/xdyn-for-cs 2>/dev/null; "
-        f"/lab/LOTUSim/physics/xdyn-for-cs /lab/LOTUSim-regatta/offline/_cosim_model.yaml "
-        f"-s {solver} --dt {dt} -a 0.0.0.0 -p {port}"
-    )
-    subprocess.run(
+_XDYN_PROC = None
+
+
+def launch_xdyn(port=12345, solver="rk4", dt=0.005):
+    """Start xdyn-for-cs locally. The binary is x86-64: this needs an x86-64 host.
+    `dt` = INTERNAL integration step (--dt). rk4 mandatory."""
+    global _XDYN_PROC
+    # A leftover xdyn holding the port is worse than a crash: the new one dies of
+    # "Address already in use" while _wait_listening happily connects to the OLD
+    # server, and the run silently uses the wrong model. Refuse instead.
+    # ponytail: TOCTOU between this bind and xdyn's own -- fine for a test harness.
+    with socket.socket() as probe:
+        # SO_REUSEADDR like asio does, or sockets left in TIME_WAIT by the previous
+        # run would read as "busy" for a minute and block every relaunch.
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError:
+            raise RuntimeError(
+                f"port {port} is busy -- another xdyn is still running"
+            ) from None
+    physics = os.path.join(LOTUSIM_PATH, "physics")
+    _XDYN_PROC = subprocess.Popen(
         [
-            "docker",
-            "run",
-            "-d",
-            "--rm",
-            "--name",
-            name,
-            "--platform",
-            "linux/amd64",
+            os.path.join(physics, "xdyn-for-cs"),
+            f"{OFF}/_cosim_model.yaml",
+            "-s",
+            solver,
+            "--dt",
+            str(dt),
+            "-a",
+            "127.0.0.1",
             "-p",
-            f"{port}:{port}",
-            "-v",
-            f"{LAB}:/lab",
-            "-w",
-            "/lab/LOTUSim/assets/models",
-            "-e",
-            "LD_LIBRARY_PATH=/lab/LOTUSim/physics",
-            IMAGE,
-            "bash",
-            "-lc",
-            inner,
+            str(port),
         ],
-        check=True,
-        capture_output=True,
+        cwd=os.path.join(LOTUSIM_PATH, "assets", "models"),
+        env=dict(os.environ, LD_LIBRARY_PATH=physics),
+        stdout=open(XDYN_LOG, "w"),
+        stderr=subprocess.STDOUT,
     )
-    return name
+    _wait_listening(_XDYN_PROC, port)
 
 
-def stop_xdyn(name="regatta_cosim"):
-    subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+def _wait_listening(proc, port, timeout=20.0):
+    """Block until xdyn accepts connections. It binds only once the websocket
+    server is up, so an accepted TCP connect means the handshake will work.
+    Raises rather than returning early: a dead xdyn otherwise shows up much
+    later as an unexplained hang in the first step()."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        rc = proc.poll()
+        if rc is not None:
+            raise RuntimeError(f"xdyn-for-cs exited with {rc} -- see {XDYN_LOG}")
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=0.5).close()
+            return
+        except OSError:
+            time.sleep(0.1)
+    raise RuntimeError(f"xdyn-for-cs not listening on {port} after {timeout}s")
+
+
+def stop_xdyn():
+    global _XDYN_PROC
+    if _XDYN_PROC is not None:
+        _XDYN_PROC.kill()  # xdyn, like gz, is not reliable on SIGTERM
+        _XDYN_PROC.wait()
+        _XDYN_PROC = None
 
 
 INIT = {
