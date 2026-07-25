@@ -37,8 +37,12 @@ comfortable keyboard demo.
 - `lotusim:focus-v2` carries two git-invisible docker-commit layers (rebuilt
   physics plugin + ros_tcp_endpoint) — rebuild recipe in README. Backup tag:
   `focus-v2-pre-quatfix`. When upstream merges the PRs, rebase
-  `LOTUSim@feature/focus-v2-model` (duplicate cherry-picks drop automatically)
-  and rebake the image from clean upstream.
+  `LOTUSim@regatta-base` (duplicate cherry-picks drop automatically) and rebake
+  the image from clean upstream.
+- `LOTUSim@regatta-base` = upstream `new_main` + focus_v2 model + patched xdyn
+  binaries (pending naval-group/LOTUSim-Xdyn#2) + composable `--assets-path`
+  (pending naval-group/LOTUSim#47). Each temporary layer disappears when its
+  upstream PR lands; the branch should melt back into upstream.
 - Root blends (`~/src/lotusim-lab/*.blend`) are working copies; versioned
   sources live in `assets/blend/` (make the texture path relative on first open).
 - Watch: naval-group/LOTUSim #28, #33, #35.

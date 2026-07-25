@@ -82,17 +82,17 @@ Regatta scene in the editor and press Play — see
 
 Runtime is **Docker only** (this project is developed on Apple Silicon;
 `--platform linux/amd64` via Rosetta, RTF ≈ 1.0 with the current step config).
-Everything runs inside `lotusim:focus-v2`, built from the post-#36 upstream
-`main` (all three physics fixes below are merged) plus the lab branches
-(`LOTUSim@integration/post36`: focus_v2 assets + control-surfaces seeding) and
+Everything runs inside `lotusim:focus-v2`, built from `LOTUSim@regatta-base`
+(upstream `new_main`, where the physics fixes below are merged, plus the focus_v2
+model, the patched xdyn binaries and the composable `--assets-path`) and
 `ros_tcp_endpoint` (for the Unity bridge). Rebuild recipe, run once inside a
 throwaway container of the previous image:
 
 ```bash
 # 1. replace the whole source tree (packages get renamed upstream; overlaying
-#    would leave dead ones behind), from the integration branch
+#    would leave dead ones behind), from the regatta base branch
 docker exec <container> rm -rf /lotusim_ws/src/LOTUSim
-git -C LOTUSim archive integration/post36 | docker cp - <container>:/lotusim_ws/src/LOTUSim
+git -C LOTUSim archive regatta-base | docker cp - <container>:/lotusim_ws/src/LOTUSim
 # 2. build IN THE SAME container the image is committed from
 #    (radar_sensor needs: apt-get install -y ros-jazzy-radar-msgs)
 docker exec <container> bash -lc \
