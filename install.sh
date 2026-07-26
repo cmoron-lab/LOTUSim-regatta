@@ -30,6 +30,23 @@ export PATH="$LOTUSIM_PATH/launch:$PATH"
 lotusim install_lotus
 ok "core installed"
 
+# The Unity bridge. `install_lotus` does not bring it, and without it the documented
+# UNITY=1 run waits 120s for a connection that cannot arrive, then falls back to
+# headless -- a documented procedure that fails, which is the defect this repository
+# has been busy removing. Built separately with --merge-install because that is the
+# layout `lotusim install_lotus` gave the core workspace; without the flag colcon
+# refuses outright.
+ENDPOINT="$LOTUSIM_WS/src/ros_tcp_endpoint"
+if [[ ! -e "$ENDPOINT" ]]; then
+  git clone https://github.com/naval-group/LOTUSim-Unity-ros-tcp-endpoint.git "$ENDPOINT"
+fi
+set +u
+source "/opt/ros/${ROS_DISTRO:-jazzy}/setup.bash"
+( cd "$LOTUSIM_WS" && colcon build --packages-select ros_tcp_endpoint \
+    --merge-install --symlink-install )
+set -u
+ok "unity bridge built"
+
 # ROS setup files read unset variables; -u must be off while sourcing them.
 set +u
 source "$LOTUSIM_WS/install/setup.bash"

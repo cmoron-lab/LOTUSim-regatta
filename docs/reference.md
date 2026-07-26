@@ -238,7 +238,30 @@ and wraps itself; force it with `RUNNER=docker`.
 **Status: unverified since the harness was split.** The container gets by
 environment (`LOTUSIM_WS`, `LOTUSIM_PATH`, `PYTHONPATH`) what a native machine gets
 from `install.sh`, and that branch has not been run on a Mac since it was written.
-The rebuild recipe for `lotusim:focus-v2` is in `README.md`.
+
+Everything runs inside `lotusim:focus-v2`, built from `LOTUSim@regatta-base`
+(upstream `new_main` with the physics fixes merged, plus the focus_v2 model, the
+patched xdyn binaries and the composable `--assets-path`) and `ros_tcp_endpoint`.
+The image carries two git-invisible `docker commit` layers, so it can only be
+rebuilt, never derived from a Dockerfile. Run this inside a throwaway container of
+the previous image:
+
+```bash
+# 1. replace the whole source tree (packages get renamed upstream; overlaying
+#    would leave dead ones behind), from the regatta base branch
+docker exec <container> rm -rf /lotusim_ws/src/LOTUSim
+git -C LOTUSim archive regatta-base | docker cp - <container>:/lotusim_ws/src/LOTUSim
+# 2. build IN THE SAME container the image is committed from
+#    (radar_sensor needs: apt-get install -y ros-jazzy-radar-msgs)
+docker exec <container> bash -lc \
+  'source /opt/ros/jazzy/setup.bash && cd /lotusim_ws && \
+   colcon build --merge-install'
+# 3. freeze the layer -- docker commit KEEPS the container entrypoint: create the
+#    container without --entrypoint, or restore ENTRYPOINT ["/ros_entrypoint.sh"]
+docker commit <container> lotusim:focus-v2
+```
+
+Backup tag before the quaternion fix: `focus-v2-pre-quatfix`.
 
 ### Performance
 
