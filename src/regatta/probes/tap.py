@@ -3,12 +3,13 @@
 websocket text frames as JSONL. Bytes are forwarded verbatim; decoding is
 purely passive, so a decode bug can never corrupt the plugin<->xdyn stream.
 
-Runs INSIDE the lotusim container (stdlib only). Point the gz plugin's
+Stdlib only, so it runs anywhere the harness does. Point the gz plugin's
 <uri> at ws://127.0.0.1:9999 and xdyn stays on 12345.
 
 Log lines: {"ts": <epoch>, "dir": "c2x"|"x2c", "msg": <json|string>}
            ("c2x" = gz plugin -> xdyn, "x2c" = xdyn -> gz plugin)
 """
+
 import argparse
 import asyncio
 import json
@@ -37,9 +38,14 @@ class Sniffer:
                 i = self.buf.find(b"\r\n\r\n")
                 if i < 0:
                     return
-                self.log({"ts": time.time(), "dir": self.dir,
-                          "http": self.buf[:i].decode("latin1")})
-                del self.buf[:i + 4]
+                self.log(
+                    {
+                        "ts": time.time(),
+                        "dir": self.dir,
+                        "http": self.buf[:i].decode("latin1"),
+                    }
+                )
+                del self.buf[: i + 4]
                 self.in_http = False
             while self._frame():
                 pass
@@ -68,12 +74,12 @@ class Sniffer:
         if masked:
             if len(b) < i + 4:
                 return False
-            key = bytes(b[i:i + 4])
+            key = bytes(b[i : i + 4])
             i += 4
         if len(b) < i + ln:
             return False
-        payload = bytes(b[i:i + ln])
-        del b[:i + ln]
+        payload = bytes(b[i : i + ln])
+        del b[: i + ln]
         if key:
             payload = bytes(c ^ key[j % 4] for j, c in enumerate(payload))
         if op in (0, 1, 2):  # continuation / text / binary
@@ -120,12 +126,14 @@ async def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--listen", type=int, default=9999)
     ap.add_argument("--target", default="127.0.0.1:12345")
-    ap.add_argument("--log", default="/lab/LOTUSim-regatta/_tap.jsonl")
+    # /lab/... was the path inside the Docker image, dead since the native port.
+    ap.add_argument("--log", default="/tmp/regatta_tap.jsonl")
     a = ap.parse_args()
     host, port = a.target.rsplit(":", 1)
     logf = open(a.log, "w", buffering=1)
     server = await asyncio.start_server(
-        lambda r, w: handle(r, w, (host, int(port)), logf), "127.0.0.1", a.listen)
+        lambda r, w: handle(r, w, (host, int(port)), logf), "127.0.0.1", a.listen
+    )
     print(f"ws_tap: :{a.listen} -> {a.target}, log {a.log}", flush=True)
     async with server:
         await server.serve_forever()

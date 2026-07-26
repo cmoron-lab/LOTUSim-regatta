@@ -7,10 +7,8 @@ Env: HELM (deg, default 25.0), DUR (sim seconds, default 30.0)."""
 
 import math
 import os
-import sys
 
-sys.path.insert(0, os.path.dirname(__file__) or ".")
-import ws  # noqa: E402
+from regatta import xdyn
 
 COMM_DT = 0.005
 
@@ -22,16 +20,16 @@ def main():
     sheet = math.radians(25.0)
     helm = math.radians(float(os.environ.get("HELM", "25.0")))
 
-    ws.write_model(wind_dir_deg)
-    ws.launch_xdyn(solver="rk4", dt=0.001)
+    xdyn.write_model(wind_dir_deg)
+    xdyn.launch_xdyn(solver="rk4", dt=0.001)
     try:
-        sock = ws.ws_connect("127.0.0.1", 12345)
-        st = ws.init_at(wind_from + math.radians(60), u=0.8)
+        sock = xdyn.ws_connect("127.0.0.1", 12345)
+        st = xdyn.init_at(wind_from + math.radians(60), u=0.8)
         hist = []  # (t, yaw_rad)
         next_print = 0.0
         for _ in range(int(dur / COMM_DT)):
-            st = ws.step(sock, st, sheet, helm, COMM_DT)
-            yaw = ws.yaw_of(st)
+            st = xdyn.step(sock, st, sheet, helm, COMM_DT)
+            yaw = xdyn.yaw_of(st)
             hist.append((st["t"], yaw))
             if st["t"] >= next_print:
                 print(
@@ -52,7 +50,7 @@ def main():
             f"mean cap (last 5s)={math.degrees(mean_yaw):.1f}deg"
         )
     finally:
-        ws.stop_xdyn()
+        xdyn.stop_xdyn()
 
 
 if __name__ == "__main__":
