@@ -95,9 +95,7 @@ def _selftest():
             header=NS(stamp=NS(sec=int(t), nsec=round((t % 1) * 1e9))),
         )
 
-    state.update(
-        {"idx": 0, "side": [None, None], "x": None, "y": None, "n": 0, "sim_t": 0.0}
-    )
+    state.update({"idx": 0, "side": [None, None], "x": None, "y": None, "n": 0, "sim_t": 0.0})
     on_pose(pose(50.0, 50.0, 1.5))
     assert state["idx"] == 0, "a distant boat rounds nothing"
     assert abs(state["sim_t"] - 1.5) < 1e-6, "sim_t must follow the message stamp"
@@ -111,9 +109,7 @@ def _selftest():
     assert state["idx"] == 1, "windward rounded, buoy left to port"
     on_pose(pose(-1.0, -1.0, 4.0))
     assert state["idx"] == 2, "leeward rounded, in order"
-    assert state["side"] == [2.0, 1.0], (
-        "the lateral pass distance is what gets reported"
-    )
+    assert state["side"] == [2.0, 1.0], "the lateral pass distance is what gets reported"
     print("selftest OK")
 
 

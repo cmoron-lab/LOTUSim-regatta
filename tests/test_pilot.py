@@ -59,9 +59,7 @@ def test_rounding_target_sits_beside_the_mark_on_the_port_hand():
 
     # the target must itself satisfy the rounding test, or the pilot would be sent
     # to a point that never counts and she would circle it for ever
-    assert has_rounded(
-        rounding_target((0.0, 0.0), (15.0, 0.0)), (15.0, 0.0), (0.0, 0.0)
-    )
+    assert has_rounded(rounding_target((0.0, 0.0), (15.0, 0.0)), (15.0, 0.0), (0.0, 0.0))
 
 
 def test_mark_counts_only_once_clear_astern_and_left_to_port():

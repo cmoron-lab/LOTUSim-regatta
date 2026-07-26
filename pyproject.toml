@@ -26,3 +26,13 @@ packages = ["src/regatta"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+# 100 rather than the default 88: this code carries long explanatory comments and
+# f-strings, and at 88 the formatter breaks calls that read perfectly well on one
+# line. The whole repository was formatted once at this width -- see
+# .git-blame-ignore-revs -- so any reflow in a future diff is a real change.
+line-length = 100
+# archive/ is frozen history, kept to record how decisions were reached. Reformatting
+# it would rewrite the record while changing nothing that runs.
+exclude = ["archive"]

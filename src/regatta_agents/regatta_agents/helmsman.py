@@ -47,16 +47,12 @@ class Helmsman(Node):
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
-        self.pub = self.create_publisher(
-            VesselCmdArray, f"/{self.world}/vessel_cmd_array", qos
-        )
+        self.pub = self.create_publisher(VesselCmdArray, f"/{self.world}/vessel_cmd_array", qos)
         self._publish(opt_sheet(0.0), 0.0)  # seed neutral so xdyn has a command
 
         if _HAVE_GZ:
             self.gz = GzNode()
-            self.gz.subscribe(
-                Pose_V, f"/world/{self.world}/dynamic_pose/info", self._on_pose
-            )
+            self.gz.subscribe(Pose_V, f"/world/{self.world}/dynamic_pose/info", self._on_pose)
         else:
             self.get_logger().error("gz-transport python unavailable; no pose feedback")
         self.create_timer(1.0 / self.rate_hz, self._control)
@@ -77,11 +73,7 @@ class Helmsman(Node):
                 yaw = math.atan2(math.sin(d), math.cos(d))
                 # yaw rate by finite difference on the message header stamp (Pilot damping term)
                 t = msg.header.stamp.sec + msg.header.stamp.nsec * 1e-9
-                if (
-                    self._prev_yaw is not None
-                    and self._prev_t is not None
-                    and t > self._prev_t
-                ):
+                if self._prev_yaw is not None and self._prev_t is not None and t > self._prev_t:
                     self.r = math.atan2(
                         math.sin(yaw - self._prev_yaw), math.cos(yaw - self._prev_yaw)
                     ) / (t - self._prev_t)

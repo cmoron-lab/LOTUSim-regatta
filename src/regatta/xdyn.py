@@ -37,9 +37,7 @@ def _lotusim_path():
     a missing module -- which is exactly how this failure reached us."""
     path = os.environ.get("LOTUSIM_PATH", "")
     if not path:
-        raise RuntimeError(
-            "LOTUSIM_PATH is unset -- source the environment first: . ./env.sh"
-        )
+        raise RuntimeError("LOTUSIM_PATH is unset -- source the environment first: . ./env.sh")
     return path
 
 
@@ -156,9 +154,7 @@ def launch_xdyn(port=12345, solver="rk4", dt=0.005):
         try:
             probe.bind(("127.0.0.1", port))
         except OSError:
-            raise RuntimeError(
-                f"port {port} is busy -- another xdyn is still running"
-            ) from None
+            raise RuntimeError(f"port {port} is busy -- another xdyn is still running") from None
     lotusim = _lotusim_path()
     physics = os.path.join(lotusim, "physics")
     _XDYN_PROC = subprocess.Popen(
@@ -238,10 +234,7 @@ def _wslog(direction, msg):
     if _LOGF is None:
         _LOGF = open(path, "w", buffering=1)
     _LOGF.write(
-        json.dumps(
-            {"ts": time.time(), "dir": direction, "msg": msg}, separators=(",", ":")
-        )
-        + "\n"
+        json.dumps({"ts": time.time(), "dir": direction, "msg": msg}, separators=(",", ":")) + "\n"
     )
 
 

@@ -121,9 +121,7 @@ class Pilot:
 
     def _steer(self, desired, yaw, r, gain=1.0):
         """Sheet for the current true-wind angle, PD rudder onto `desired`."""
-        helm = clamp(
-            HELM_SIGN * (gain * KP * wrap(desired - yaw) - KD * r), -HELM_MAX, HELM_MAX
-        )
+        helm = clamp(HELM_SIGN * (gain * KP * wrap(desired - yaw) - KD * r), -HELM_MAX, HELM_MAX)
         return opt_sheet(abs(math.degrees(wrap(yaw - self.wind_from)))), helm
 
     def update(self, x, y, yaw, r):
@@ -153,9 +151,7 @@ class Pilot:
         else:
             if upwind:
                 c = cross_track(pos, self.leg_start, target)
-                if (c > self.corridor and self.tack > 0) or (
-                    c < -self.corridor and self.tack < 0
-                ):
+                if (c > self.corridor and self.tack > 0) or (c < -self.corridor and self.tack < 0):
                     self.tack, self.tacks, self.tacking = (
                         -self.tack,
                         self.tacks + 1,
