@@ -53,18 +53,25 @@ does not get "fixed".
 
 Phrased as "if you are about to…", because that is when they are cheap.
 
-- **About to `pkill -f` or `pgrep -f` anything?** The pattern matches your own shell
-  and its ancestors too — this has killed a session mid-task. Ask gz instead:
-  `gz topic -l | grep -q "^/world/lotusim/"`.
+- **About to identify a process with `pgrep`?** It is wrong in both directions. With
+  `-f` the pattern matches your own shell and its ancestors — that has killed a
+  session mid-task. Without `-f` it matches only the process **name**, so
+  `pgrep -a "gz sim"` finds nothing while gz is running, because the name is `gz`.
+  Ask gz instead: `gz topic -l | grep -q "^/world/lotusim/"`.
+- **About to kill whatever is publishing?** Check who owns it first. A
+  `regatta_stack.sh` in the process tree may be a person's run rather than an orphan
+  — `ps -o pid,ppid,lstart,cmd` and the parent chain tell you which. The harness
+  refusing to start is correct behaviour, not an obstacle to clear.
 - **About to conclude from `ps` or `grep` output that a process is dead?** The `rtk`
   hook summarises it. Re-run through `rtk proxy ps ...` before believing it. A
   warning above an output invalidates that output.
 - **About to trust a gate that passed?** Read the simulated duration it reports. A
   lap is ≈ 243 s. A pass in 17 s means two boats were publishing.
 - **About to add a dependency to `src/regatta`?** See invariant 6.
-- **About to edit an import before the code that uses it?** The repository's format
-  hook strips imports it sees as unused, and it fires between your two edits. Change
-  the call sites first, or check the import survived.
+- **About to edit an import before the code that uses it?** The format hook strips
+  imports it sees as unused and fires after **each** edit, so an import added in edit
+  1 is dead when the hook looks and gone before edit 2 uses it. That deleted
+  `from regatta import xdyn` mid-refactor here. Change the call sites first.
 - **About to write a shell one-liner with nested quotes?** Put it in a file. A
   quoting slip in a `python -c` cost a 10-minute measurement here.
 - **About to run something long?** `uv run regatta-oracle` is ~10 min, the smoke
