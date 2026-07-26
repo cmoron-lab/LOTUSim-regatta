@@ -229,11 +229,13 @@ overlay, and syncs the `uv` environment. Requirements: Ubuntu 24.04 (Jazzy) and
 Scenario assets never get copied into the core: they reach gz through
 `lotusim --assets-path`.
 
-### macOS — Docker, under Rosetta
+### Everything else — Docker
 
 ROS and gz do not run natively on Apple Silicon, so the same stack runs in a
-container (`--platform linux/amd64`). `scripts/run_regatta.sh` detects the platform
-and wraps itself; force it with `RUNNER=docker`.
+container (`--platform linux/amd64`, under Rosetta). Any other Linux lands here too:
+`scripts/run_regatta.sh` routes on `install.sh`'s own rule — Ubuntu 24.04 **and**
+x86-64 — rather than on `uname -s`, because a Fedora host or an arm64 Ubuntu cannot
+run the native path either. Force either side with `RUNNER=native|docker`.
 
 **Status: unverified since the harness was split.** The container gets by
 environment (`LOTUSIM_WS`, `LOTUSIM_PATH`, `PYTHONPATH`) what a native machine gets

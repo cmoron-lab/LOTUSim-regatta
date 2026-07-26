@@ -1,20 +1,37 @@
 #!/bin/bash
 # Entry point for the regatta stack.
-#   Linux : the stack runs directly, in the LOTUSim environment of this machine.
-#   macOS : ROS and gz cannot run natively, so the same stack runs in a container.
+#   Ubuntu 24.04 x86-64 : the stack runs directly, in this machine's LOTUSim
+#                         environment -- the only platform install.sh can build.
+#   anything else       : the same stack runs in a container.
 # Override with RUNNER=native|docker.
 # Usage: run_regatta.sh [duration_s] [hold|smoke]
 set -u
 DUR=${1:-120}
 MODE=${2:-hold}
 REGATTA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUNNER=${RUNNER:-$([ "$(uname -s)" = "Linux" ] && echo native || echo docker)}
+
+# "Linux" is not the requirement. Native needs ROS 2 Jazzy and an x86-64
+# `xdyn-for-cs`, which is exactly install.sh's own gate. Route on that same rule:
+# on Fedora, on Debian, on an arm64 Ubuntu, the native path dies in the preflight
+# with "run install.sh" -- advice that cannot work there -- while the container
+# would have carried the run.
+native_supported() {
+  [ "$(uname -m)" = x86_64 ] || return 1
+  . /etc/os-release 2> /dev/null || return 1 # a subshell's copy: nothing leaks out
+  [ "${ID:-}" = ubuntu ] && [ "${VERSION_ID:-}" = 24.04 ]
+}
+RUNNER=${RUNNER:-$(native_supported && echo native || echo docker)}
 
 if [ "$RUNNER" = "native" ]; then
   exec "$REGATTA_ROOT/scripts/regatta_stack.sh" "$DUR" "$MODE"
 fi
 
-# --- Docker path (macOS) ---------------------------------------------------
+# --- Docker path (macOS, and any Linux that is not the reference platform) ---
+command -v docker > /dev/null || {
+  echo "[!] this machine is not the native platform (install.sh needs Ubuntu 24.04"
+  echo "[!] x86-64), and docker is not installed either. See README.md."
+  exit 1
+}
 IMAGE=${IMAGE:-lotusim:focus-v2}
 LAB=${LAB:-$(cd "$REGATTA_ROOT/.." && pwd)}
 UNITY_PORT=; [ -n "${UNITY:-}" ] && UNITY_PORT="-p 10000:10000"

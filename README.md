@@ -106,11 +106,12 @@ stack at each layer boundary.
 | [#32](https://github.com/naval-group/LOTUSim/issues/32) / [#33](https://github.com/naval-group/LOTUSim/pull/33) | NED↔ENU attitude conversion missing the FLU↔FRD body-frame swap — root cause of the boat not holding a beat | merged upstream 2026-07-13 |
 | [#34](https://github.com/naval-group/LOTUSim/issues/34) / [#35](https://github.com/naval-group/LOTUSim/pull/35) | co-sim `t` carried the step duration in ms instead of absolute sim time — freezes any time-dependent forcing (waves); prerequisite for swell | merged upstream 2026-07-13 |
 
-## macOS
+## macOS, and any Linux that is not Ubuntu 24.04 x86-64
 
 ROS and gz do not run natively on Apple Silicon, so the same stack runs in a
-container under Rosetta; `scripts/run_regatta.sh` detects the platform and wraps
-itself. **Currently unverified since the harness was split** — see
+container under Rosetta; `scripts/run_regatta.sh` wraps itself whenever this machine
+is not what `install.sh` targets. **Currently unverified since the harness was
+split** — see
 [`docs/reference.md`](docs/reference.md) for the status and the image rebuild recipe.
 
 License: EPL-2.0.
