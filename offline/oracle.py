@@ -42,7 +42,7 @@ def run_lap(
             traj.append(dict(st))
             if pilot.finished:
                 break
-        return pilot.wp, pilot.tacks, traj
+        return pilot.rounded, pilot.tacks, traj
     finally:
         ws.stop_xdyn()
 

@@ -4,12 +4,15 @@ xdyn oracle and the ROS2 helmsman. No I/O: feed it pose, get (sheet, helm).
 
 Ported from the offline-validated _offline/cosim.py (2/2 marks, 3-4 tacks on the
 tuned model). All angles radians; headings are NED compass; HELM_SIGN=-1."""
+
 import math
 
 HELM_SIGN = -1.0
 AOA_OPT = 20.0
-NO_GO = math.radians(50.0)          # half dead-zone: mark closer than this to the wind -> beat
-CLOSE_HAULED = math.radians(60.0)   # real upwind heading (tenable + good VMG; foot for speed)
+# half dead-zone: a mark closer than this to the wind has to be beaten to
+NO_GO = math.radians(50.0)
+# real upwind heading (tenable + good VMG; foot for speed)
+CLOSE_HAULED = math.radians(60.0)
 KP, KD, HELM_MAX = 2.2, 0.9, math.radians(35)
 
 
@@ -49,7 +52,8 @@ class Pilot:
     State machine: beat toward the windward mark on alternating tacks inside a
     corridor; when crossing the corridor edge, run an ENGAGED-TACK (firm rudder +
     high gain) through the eye instead of stalling in irons; steer straight when
-    the mark is not upwind; advance to the next mark within wp_radius."""
+    the mark is not upwind; advance to the next mark within wp_radius; round the
+    last mark and start the next lap."""
 
     def __init__(self, marks, wind_from, corridor=5.0, wp_radius=1.8):
         self.marks = list(marks)
@@ -57,22 +61,33 @@ class Pilot:
         self.corridor = corridor
         self.wp_radius = wp_radius
         self.wp = 0
+        self.rounded = 0  # marks rounded since the start, across laps
         self.tack = 1
         self.tacks = 0
         self.leg_start = (0.0, 0.0)
         self.tacking = False
-        self.finished = False
+        self.finished = False  # latched once a full lap is in: the gates stop there
+
+    def _steer(self, desired, yaw, r, gain=1.0):
+        """Sheet for the current true-wind angle, PD rudder onto `desired`."""
+        helm = clamp(
+            HELM_SIGN * (gain * KP * wrap(desired - yaw) - KD * r), -HELM_MAX, HELM_MAX
+        )
+        return opt_sheet(abs(math.degrees(wrap(yaw - self.wind_from)))), helm
 
     def update(self, x, y, yaw, r):
         pos = (x, y)
-        if self.finished:
-            return opt_sheet(abs(math.degrees(wrap(yaw - self.wind_from)))), 0.0
         mark = self.marks[self.wp]
+        # Rounding the last mark starts a new lap rather than stopping: this xdyn sail
+        # polar has no in-irons regime (Cl = 0.8 at 10 deg of incidence, no stall), so
+        # NO trim brings her to rest -- measured, see docs/measurements/2026-07-WSL.md.
+        # Sailing on is what keeps her on the course area; centring the helm at the
+        # last mark sailed her out of it for ever, which is what the web UI showed.
         if math.hypot(mark[0] - x, mark[1] - y) < self.wp_radius:
-            self.wp += 1
-            if self.wp >= len(self.marks):
+            self.rounded += 1
+            self.wp = (self.wp + 1) % len(self.marks)
+            if self.wp == 0:
                 self.finished = True
-                return opt_sheet(abs(math.degrees(wrap(yaw - self.wind_from)))), 0.0
             self.leg_start, mark, self.tacking = pos, self.marks[self.wp], False
 
         brg = math.atan2(mark[1] - y, mark[0] - x)
@@ -85,11 +100,14 @@ class Pilot:
         else:
             if upwind:
                 c = cross_track(pos, self.leg_start, mark)
-                if (c > self.corridor and self.tack > 0) or (c < -self.corridor and self.tack < 0):
-                    self.tack, self.tacks, self.tacking = -self.tack, self.tacks + 1, True
+                if (c > self.corridor and self.tack > 0) or (
+                    c < -self.corridor and self.tack < 0
+                ):
+                    self.tack, self.tacks, self.tacking = (
+                        -self.tack,
+                        self.tacks + 1,
+                        True,
+                    )
             desired = desired_heading(pos, mark, self.wind_from, self.tack)
 
-        kp = KP * (2.4 if self.tacking else 1.0)
-        helm = clamp(HELM_SIGN * (kp * wrap(desired - yaw) - KD * r), -HELM_MAX, HELM_MAX)
-        twa = abs(math.degrees(wrap(yaw - self.wind_from)))
-        return opt_sheet(twa), helm
+        return self._steer(desired, yaw, r, gain=2.4 if self.tacking else 1.0)

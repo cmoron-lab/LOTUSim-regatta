@@ -74,6 +74,11 @@ Brings up xdyn → helmsman → gz headless and asserts the boat rounds both mar
 the machine is. It refuses to start if anything is already publishing on the
 world's topics — two simulations on one topic make the gate believe either boat.
 
+The gate stops at the first full lap; the pilot itself keeps going, rounding the
+last mark and starting the next lap, so `hold` runs sail laps indefinitely. That
+is not a stylistic choice: the sail polar has no in-irons regime, so no trim
+stops the boat — see `docs/measurements/2026-07-WSL.md`.
+
 ### 3. Unity (rendered)
 
 ```bash
