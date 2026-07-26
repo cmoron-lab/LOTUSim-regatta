@@ -1,0 +1,8 @@
+# Commits that changed formatting only, and should not appear in `git blame`.
+# GitHub honours this file automatically. Locally, once:
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add a commit here only if it changed no behaviour whatsoever.
+
+# style: format the repository once, at 100 columns
+d628d0c9c0339608b6ff850acfa2ef727d01b713
