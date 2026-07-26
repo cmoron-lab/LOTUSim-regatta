@@ -14,6 +14,9 @@ NO_GO = math.radians(50.0)
 # real upwind heading (tenable + good VMG; foot for speed)
 CLOSE_HAULED = math.radians(60.0)
 KP, KD, HELM_MAX = 2.2, 0.9, math.radians(35)
+# how far to the side of a buoy the pilot aims, so it sails AROUND it: the boat is
+# 1 m long and the buoy has girth, so anything less is a collision course
+ROUND_OFFSET = 2.0
 
 
 def wrap(a):
@@ -46,20 +49,68 @@ def cross_track(pos, a, b):
     return ((pos[0] - a[0]) * (-ly) + (pos[1] - a[1]) * lx) / L
 
 
+def leg_axis(a, b):
+    """Unit vector from a to b; (1,0) if they coincide."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L = math.hypot(dx, dy)
+    return (dx / L, dy / L) if L else (1.0, 0.0)
+
+
+def rounding_target(leg_start, mark, offset=ROUND_OFFSET, clearance=ROUND_OFFSET):
+    """Point to steer at so the mark gets ROUNDED rather than hit: `offset` to the
+    boat's starboard of the leg axis, so the mark is left to port (the World Sailing
+    convention for a W/L course), and `clearance` BEYOND it along the leg, so she
+    sails clear before turning. In NED (x North, y East) the starboard of a heading
+    (ux, uy) is (-uy, ux).
+
+    Both components matter. Aiming abeam of the mark and demanding she then get
+    clear of it cannot work: past the mark the target lies astern, so the pilot
+    would turn her back south onto it and she would circle the target instead of
+    the mark. The point she steers at has to BE the point that clears it."""
+    ux, uy = leg_axis(leg_start, mark)
+    return (
+        mark[0] + ux * clearance - uy * offset,
+        mark[1] + uy * clearance + ux * offset,
+    )
+
+
+def has_rounded(pos, mark, leg_start, clearance=ROUND_OFFSET):
+    """True once the mark is CLEAR astern along the leg AND was left to port.
+
+    A distance threshold cannot express a rounding: it fires short of the mark, so
+    the boat cuts the corner and never passes it -- visible in the web UI as a boat
+    that stays south of the windward buoy. Off on the wrong side it stays False and
+    the pilot keeps steering at the offset target, which brings her back round.
+
+    `clearance` is why she visibly sails ROUND the buoy instead of pivoting on its
+    latitude. Turning the instant she crosses it left her only 5-86 cm past the mark
+    depending on the run -- geometrically a rounding, indistinguishable from a corner
+    cut on screen. Sailing clear first also makes the turn a proper arc, so where the
+    turn ends no longer depends on how the helm's 30 Hz timer lines up with the
+    physics clock."""
+    ux, uy = leg_axis(leg_start, mark)
+    dx, dy = pos[0] - mark[0], pos[1] - mark[1]
+    astern = dx * ux + dy * uy >= clearance
+    to_starboard = -dx * uy + dy * ux > 0.0  # mark on the boat's port hand
+    return astern and to_starboard
+
+
 class Pilot:
     """Stateful W/L pilot. update(x,y,yaw,r) -> (sheet_rad, helm_rad).
 
     State machine: beat toward the windward mark on alternating tacks inside a
     corridor; when crossing the corridor edge, run an ENGAGED-TACK (firm rudder +
     high gain) through the eye instead of stalling in irons; steer straight when
-    the mark is not upwind; advance to the next mark within wp_radius; round the
-    last mark and start the next lap."""
+    the mark is not upwind; aim ROUND_OFFSET to the side of each mark and count it
+    once it is astern and left to port; round the last mark and start the next lap.
 
-    def __init__(self, marks, wind_from, corridor=5.0, wp_radius=1.8):
+    The leeward mark doubles as the start and finish line: crossing its
+    perpendicular southbound IS the finish, so no extra geometry is needed."""
+
+    def __init__(self, marks, wind_from, corridor=5.0):
         self.marks = list(marks)
         self.wind_from = wind_from
         self.corridor = corridor
-        self.wp_radius = wp_radius
         self.wp = 0
         self.rounded = 0  # marks rounded since the start, across laps
         self.tack = 1
@@ -83,14 +134,16 @@ class Pilot:
         # NO trim brings her to rest -- measured, see docs/measurements/2026-07-WSL.md.
         # Sailing on is what keeps her on the course area; centring the helm at the
         # last mark sailed her out of it for ever, which is what the web UI showed.
-        if math.hypot(mark[0] - x, mark[1] - y) < self.wp_radius:
+        if has_rounded(pos, mark, self.leg_start):
             self.rounded += 1
             self.wp = (self.wp + 1) % len(self.marks)
             if self.wp == 0:
                 self.finished = True
             self.leg_start, mark, self.tacking = pos, self.marks[self.wp], False
 
-        brg = math.atan2(mark[1] - y, mark[0] - x)
+        # Steer at a point beside the mark, never at the mark itself.
+        target = rounding_target(self.leg_start, mark)
+        brg = math.atan2(target[1] - y, target[0] - x)
         upwind = abs(wrap(brg - self.wind_from)) < NO_GO
 
         if self.tacking:
@@ -99,7 +152,7 @@ class Pilot:
                 self.tacking = False
         else:
             if upwind:
-                c = cross_track(pos, self.leg_start, mark)
+                c = cross_track(pos, self.leg_start, target)
                 if (c > self.corridor and self.tack > 0) or (
                     c < -self.corridor and self.tack < 0
                 ):
@@ -108,6 +161,6 @@ class Pilot:
                         self.tacks + 1,
                         True,
                     )
-            desired = desired_heading(pos, mark, self.wind_from, self.tack)
+            desired = desired_heading(pos, target, self.wind_from, self.tack)
 
         return self._steer(desired, yaw, r, gain=2.4 if self.tacking else 1.0)

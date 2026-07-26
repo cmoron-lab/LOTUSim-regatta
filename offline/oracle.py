@@ -21,7 +21,7 @@ def run_lap(
     marks=((15.0, 0.0), (0.0, 0.0)),
     dt=0.001,
     comm_dt=0.005,
-    tmax=170.0,
+    tmax=220.0,  # a real rounding sails past each buoy, so the lap is longer than 170
 ):
     """wind_dir_deg is the yaml compass bearing the wind blows TOWARD (180 => from North).
     `dt` = xdyn internal integration step (--dt). `comm_dt` = co-sim communication step
