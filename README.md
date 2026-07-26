@@ -51,13 +51,13 @@ Fast, deterministic, no gz/ROS/Unity — direct websocket to `xdyn-for-cs`. This
 is the reference the full stack is checked against.
 
 ```bash
-cd offline && python3 oracle.py
-# xdyn_dt 0.001 | comm_dt 0.005 | marks reached 2/2 | tacks 3 | dur 160s
+. ./env.sh && uv run regatta-oracle
+# xdyn_dt 0.001 | comm_dt 0.005 | marks reached 2/2 | tacks 3 | dur 189s
 # ORACLE PASS
 ```
 
-It drives `$LOTUSIM_PATH/physics/xdyn-for-cs` directly, so the environment must be
-sourced first: `. ./env.sh`.
+It drives `$LOTUSIM_PATH/physics/xdyn-for-cs` directly, which is why the
+environment has to be sourced first.
 
 Knobs: env `COMM_DT` / `XDYN_DT` to A/B the step sizes.
 
@@ -161,17 +161,17 @@ win by batching communication. Full figures and method:
 
 The smoke gate takes its budget in **simulated** seconds for exactly this reason:
 RTF varies with the machine, and it must change how long you wait, never the
-verdict. A full lap is ≈ 170 simulated seconds (the offline oracle needs ≈ 160,
-starting with way on rather than from rest).
+verdict. A full lap is ≈ 243 simulated seconds through gz (the offline oracle needs
+≈ 189, starting with way on rather than from rest).
 
 ## Debug tooling
 
 - `WS_TAP=1 bash scripts/run_regatta.sh ...` — passive websocket tap between
   the gz plugin and xdyn (`_tap.jsonl`), for diffing what the plugin actually
   sends/receives against the offline reference.
-- `WS_LOG=<path>` (offline side, in `offline/ws.py`) — same idea, logs the
+- `WS_LOG=<path>` (offline side, in `src/regatta/xdyn.py`) — same idea, logs the
   oracle's own websocket traffic.
-- `offline/probe_helm.py` — constant-rudder probe (bypasses the Pilot) to
+- `python3 -m regatta.probes.helm` — constant-rudder probe (bypasses the Pilot) to
   characterize the boat's open-loop response in isolation.
 - The debugging pattern that found the upstream bugs below: diff the round
   trip bit-for-bit between the offline oracle and the gz stack at each layer
@@ -191,14 +191,17 @@ starting with way on rather than from rest).
 LOTUSim-regatta/
 ├── install.sh                # Ubuntu 24.04 bring-up: core + this repo as an overlay
 ├── env.sh                    # the environment, sourceable from bash or zsh
-├── offline/                  # websocket physics oracle (ws.py, oracle.py, probe_helm.py)
-├── src/regatta_agents/       # ROS2 package: pilot.py (brain) + helmsman.py (ROS node)
+├── pyproject.toml            # the uv project: src/regatta, zero runtime deps
+├── src/regatta/              # PURE python, no ROS: pilot.py (brain), xdyn.py
+│                             #   (co-sim client), oracle.py, probes/{helm,tap}.py
+├── src/regatta_agents/       # ROS2 package: helmsman.py, the node around the brain
+├── tests/                    # pytest for the pure core
 ├── assets/{worlds,models}/   # regatta.world, regatta_buoy model
 ├── assets/conditions/        # scenario wind, layered onto the core model by xdyn
 ├── assets/blend/             # Blender sources (buoy, boat)
 ├── unity/                    # C# scripts deployed into LOTUSim-Unity-modules
 ├── scripts/                  # run_regatta.sh (entry point) + regatta_stack.sh (the
-│                             #   sequence), smoke_rounds_marks.py, ws_tap.py
+│                             #   sequence), smoke_rounds_marks.py
 └── docs/                     # design, plans, measurements, HANDOFF, unity-scenario.md
 ```
 

@@ -38,6 +38,12 @@ source "$REGATTA_ROOT/install/setup.bash"
 set -u
 ok "overlay built"
 
+# uv is not an apt package, so install_dep.sh cannot bring it. Say what to do rather
+# than dying on "command not found" three lines later.
+command -v uv > /dev/null || die "uv is required: curl -LsSf https://astral.sh/uv/install.sh | sh"
+uv sync --project "$REGATTA_ROOT"
+ok "python environment synced"
+
 # Deliberately NOT written to ~/.bashrc: the user's interactive shell is theirs,
 # and half of them run zsh, where the ROS setup.bash files break outright.
 ok "done. To use it in a shell (bash or zsh):"

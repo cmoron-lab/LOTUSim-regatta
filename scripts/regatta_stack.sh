@@ -80,7 +80,7 @@ sleep 4
 
 WORLD_ARG="regatta.world"
 if [ -n "${WS_TAP:-}" ]; then
-  python3 "$REGATTA_ROOT/scripts/ws_tap.py" --log "$REGATTA_ROOT/_tap.jsonl" \
+  python3 -m regatta.probes.tap --log "$REGATTA_ROOT/_tap.jsonl" \
     > /tmp/ws_tap.log 2>&1 & WPID=$!
   sleep 1
   sed "s|ws://127.0.0.1:12345|ws://127.0.0.1:9999|" \

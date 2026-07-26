@@ -37,4 +37,24 @@ if [ -n "${ZSH_VERSION:-}" ]; then _lr_ext=zsh; else _lr_ext=bash; fi
 # Absent until install.sh has built the overlay; the core alone is still usable.
 [ -f "$_lr_root/install/setup.$_lr_ext" ] && . "$_lr_root/install/setup.$_lr_ext"
 
+# `lotusim` ships completion for its subcommands and flags, and for the xdyn
+# binaries. It used to be sourced from the ~/.bashrc block that 021338e removed, and
+# was never re-homed; env.sh is where it belongs. Interactive shells only -- the
+# harness sources this file on every run and has no use for a compinit.
+case "$-" in
+  *i*)
+    if [ -n "${ZSH_VERSION:-}" ]; then
+      # The script speaks bash's completion API. zsh hosts it through bashcompinit,
+      # whose `complete` shim calls compdef -- so compinit must have run first, or
+      # every registration dies with "compdef: command not found".
+      # ponytail: -u skips the insecure-directory prompt rather than stalling a
+      # sourced file mid-way; most zshrc have run compinit already anyway.
+      command -v compdef > /dev/null 2>&1 || { autoload -U +X compinit && compinit -u; }
+      autoload -U +X bashcompinit && bashcompinit
+    fi
+    [ -f "$LOTUSIM_PATH/launch/bash_completion.sh" ] &&
+      . "$LOTUSIM_PATH/launch/bash_completion.sh"
+    ;;
+esac
+
 unset _lr_self _lr_root _lr_ext
