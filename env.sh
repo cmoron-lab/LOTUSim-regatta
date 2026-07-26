@@ -18,6 +18,15 @@ case ":$PATH:" in
   *) export PATH="$LOTUSIM_PATH/launch:$PATH" ;;
 esac
 
+# The ROS node and the gz smoke gate run on the SYSTEM interpreter -- rclpy and
+# gz-transport come from apt, not from any venv -- and they import `regatta`. A
+# single path entry is enough because that package has no dependencies of its own;
+# uv serves the very same files to the offline side as an editable install.
+case ":${PYTHONPATH:-}:" in
+  *":$_lr_root/src:"*) ;;                        # already there
+  *) export PYTHONPATH="$_lr_root/src${PYTHONPATH:+:$PYTHONPATH}" ;;
+esac
+
 # ROS setup files ship one flavour per shell, and they are NOT interchangeable:
 # sourcing setup.bash under zsh leaves ${BASH_SOURCE} empty, so the prefix
 # resolves to $PWD and it dies looking for <cwd>/local_setup.sh.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Websocket helpers to drive xdyn-for-cs directly (no gz/ROS), migrated from
-_offline/cosim.py. The control brain lives in regatta_agents.pilot; this file
-is pure transport + the proven xdyn co-sim conventions.
+"""Websocket client for xdyn-for-cs, driving it directly with no gz and no ROS.
+The control brain lives in regatta.pilot; this file is pure transport plus the
+proven xdyn co-sim conventions.
 
 Nothing here is regatta-specific: it speaks xdyn's co-simulation API, the same
 one the gz physics_interface_plugin uses. It is a second client of that API for
@@ -22,24 +22,34 @@ import struct
 import subprocess
 import time
 
-# Core assets and the xdyn binaries come from the installed LOTUSim; repo-local
-# paths come from this file's location. Neither depends on a checkout layout.
-LOTUSIM_PATH = os.environ.get("LOTUSIM_PATH", "")
-if not LOTUSIM_PATH:
-    raise RuntimeError("LOTUSIM_PATH is unset -- source the LOTUSim environment first")
-REGATTA_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-MODEL_SRC = f"{LOTUSIM_PATH}/assets/models/focus_v2/focus_v2.yaml"
-OFF = f"{REGATTA_ROOT}/offline"
-# Absolute mesh path for the temp model: xdyn resolves it relative to its cwd
-# otherwise, and the cwd differs between the offline and gz paths.
-MESH = f"{LOTUSIM_PATH}/assets/models/focus_v2/meshes/focus_v2.stl"
+# The temp model and the launch log both live in /tmp. The previous version derived
+# a repo path by counting parent directories, which silently depended on this file
+# sitting exactly two levels below the root -- it now sits three.
 XDYN_LOG = "/tmp/xdyn_offline.log"  # where a failed launch explains itself
+MODEL_TMP = "/tmp/regatta_cosim_model.yaml"
+
+
+def _lotusim_path():
+    """Root of the installed LOTUSim tree.
+
+    Checked here rather than at import time. Raising at module scope made the
+    traceback end on `import ws`, so a missing environment variable was reported as
+    a missing module -- which is exactly how this failure reached us."""
+    path = os.environ.get("LOTUSIM_PATH", "")
+    if not path:
+        raise RuntimeError(
+            "LOTUSIM_PATH is unset -- source the environment first: . ./env.sh"
+        )
+    return path
 
 
 def write_model(wind_dir_deg, wind_speed=None):
     """Write a temp model yaml with the requested wind direction and an absolute mesh path."""
-    src = open(MODEL_SRC).read()
+    lotusim = _lotusim_path()
+    # Absolute mesh path: xdyn resolves a relative one against its cwd, and the cwd
+    # differs between the offline and the gz paths.
+    mesh = f"{lotusim}/assets/models/focus_v2/meshes/focus_v2.stl"
+    src = open(f"{lotusim}/assets/models/focus_v2/focus_v2.yaml").read()
     src, n = re.subn(
         r"(direction:\s*\{unit:\s*deg,\s*value:\s*)[-\d.]+",
         rf"\g<1>{wind_dir_deg}",
@@ -54,8 +64,8 @@ def write_model(wind_dir_deg, wind_speed=None):
             src,
             count=1,
         )
-    src = re.sub(r"^(\s*mesh:\s*)\S+\.stl", rf"\g<1>{MESH}", src, count=1, flags=re.M)
-    open(f"{OFF}/_cosim_model.yaml", "w").write(src)
+    src = re.sub(r"^(\s*mesh:\s*)\S+\.stl", rf"\g<1>{mesh}", src, count=1, flags=re.M)
+    open(MODEL_TMP, "w").write(src)
 
 
 # ---------- minimal websocket client (stdlib, RFC6455) ----------
@@ -149,11 +159,12 @@ def launch_xdyn(port=12345, solver="rk4", dt=0.005):
             raise RuntimeError(
                 f"port {port} is busy -- another xdyn is still running"
             ) from None
-    physics = os.path.join(LOTUSIM_PATH, "physics")
+    lotusim = _lotusim_path()
+    physics = os.path.join(lotusim, "physics")
     _XDYN_PROC = subprocess.Popen(
         [
             os.path.join(physics, "xdyn-for-cs"),
-            f"{OFF}/_cosim_model.yaml",
+            MODEL_TMP,
             "-s",
             solver,
             "--dt",
@@ -163,7 +174,7 @@ def launch_xdyn(port=12345, solver="rk4", dt=0.005):
             "-p",
             str(port),
         ],
-        cwd=os.path.join(LOTUSIM_PATH, "assets", "models"),
+        cwd=os.path.join(lotusim, "assets", "models"),
         env=dict(os.environ, LD_LIBRARY_PATH=physics),
         stdout=open(XDYN_LOG, "w"),
         stderr=subprocess.STDOUT,

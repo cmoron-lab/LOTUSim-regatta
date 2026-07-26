@@ -1,5 +1,5 @@
 import math
-from regatta_agents.pilot import (
+from regatta.pilot import (
     CLOSE_HAULED,
     ROUND_OFFSET,
     Pilot,
