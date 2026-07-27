@@ -154,7 +154,11 @@ def launch_xdyn(port=12345, solver="rk4", dt=0.005):
         try:
             probe.bind(("127.0.0.1", port))
         except OSError:
-            raise RuntimeError(f"port {port} is busy -- another xdyn is still running") from None
+            raise RuntimeError(
+                f"port {port} is busy -- another xdyn is still running. "
+                f"Who owns it: ss -ltnp '( sport = :{port} )' -- check whether it is "
+                f"someone's run before killing it."
+            ) from None
     lotusim = _lotusim_path()
     physics = os.path.join(lotusim, "physics")
     _XDYN_PROC = subprocess.Popen(
