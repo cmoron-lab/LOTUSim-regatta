@@ -4,8 +4,42 @@
 #                         environment -- the only platform install.sh can build.
 #   anything else       : the same stack runs in a container.
 # Override with RUNNER=native|docker.
-# Usage: run_regatta.sh [duration_s] [hold|smoke]
+# Usage: run_regatta.sh [duration_s] [hold|smoke] -- see -h.
 set -u
+
+usage() {
+  cat << 'EOF'
+usage: run_regatta.sh [duration] [hold|smoke]        (default: 120 hold)
+
+Sails a 1 m RC sailboat around a two-buoy course, in simulation: xdyn computes
+the physics, a ROS pilot steers, Gazebo ties them together. Headless by default.
+
+  hold   watch it sail: bring the simulation up, leave it running for <duration>
+         wall-clock seconds, then shut everything down.
+  smoke  pass/fail check: did the boat round both buoys? Exits 0 or 1.
+         <duration> is a budget in SIMULATED seconds -- a faster machine shortens
+         the wait, never the verdict. One lap is about 243 simulated seconds.
+
+env:
+  UNITY=1   render it: open the ROS-TCP endpoint on :10000 and wait up to 120 s
+            for the Unity scene to connect, so the start is not missed.
+  WS_TAP=1  record every physics websocket exchange to ./_tap.jsonl.
+  RUNNER=   native|docker. Default: native on Ubuntu 24.04 x86-64 (what
+            install.sh targets), docker anywhere else.
+
+examples:
+  ./scripts/run_regatta.sh 400 smoke           # one asserted lap, ~4 min
+  UNITY=1 ./scripts/run_regatta.sh 900 hold    # a quarter hour, rendered
+
+Every wait in here is bounded -- a silent gz fails the smoke gate after 30 s
+rather than hanging it. For a hard wall-clock cap on top, plain coreutils
+works: timeout 1200 ./scripts/run_regatta.sh 900 hold
+
+logs: /tmp/xdyn.log /tmp/gz.log /tmp/helm.log /tmp/endpoint.log
+EOF
+}
+case "${1:-}" in -h | --help) usage; exit 0 ;; esac
+
 DUR=${1:-120}
 MODE=${2:-hold}
 REGATTA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
