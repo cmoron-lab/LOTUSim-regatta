@@ -95,9 +95,6 @@ clearest way to show what the simulator is.
 - **macOS non-regression.** The Docker wrapper feeds the container by environment
   what a native machine gets from `install.sh`, and has not been run on a Mac since
   the harness was split. Needs the Mac.
-- **A one-time `ruff format`** over the repository. It has never been formatted
-  wholesale, so the edit hook reflows whatever file gets touched — three commits so
-  far carry unrelated reflow noise. Undecided.
 
 ## Standing notes
 

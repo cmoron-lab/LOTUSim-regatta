@@ -142,8 +142,9 @@ to the pilot. Three trims were measured; see `measurements/2026-07-WSL.md`, Q4.
 
 ## Procedures
 
-All of them assume the environment. `. ./env.sh` works in bash and zsh, writes
-nothing to your rc files, and the harness sources it by itself.
+All of them assume the environment. `. ./env.sh` works in bash and zsh, prints a
+summary of what it resolved, writes nothing to your rc files, and the harness
+sources it by itself.
 
 ### The offline oracle — physics ground truth
 
@@ -172,8 +173,8 @@ on the world's topics.
 ### A run to watch
 
 ```bash
-./scripts/run_regatta.sh 900 hold          # ~5 laps
-UNITY=1 timeout 1000 bash scripts/run_regatta.sh 900 hold
+./scripts/run_regatta.sh 900 hold          # 900 wall seconds; laps depend on RTF
+UNITY=1 ./scripts/run_regatta.sh 900 hold  # the same, rendered in Unity
 ```
 
 ### The web UI
@@ -222,20 +223,25 @@ client announces itself with `{"instance": "lotusim"}`.
 ### Ubuntu 24.04, including WSL2 — the reference platform
 
 Native. `./install.sh` clones `LOTUSim@regatta-base` into `~/lotusim_ws`, installs
-ROS 2 Jazzy and Gazebo Harmonic, builds the core, builds this repository as a colcon
-overlay, and syncs the `uv` environment. Requirements: Ubuntu 24.04 (Jazzy) and
-**x86-64** — the shipped `physics/xdyn-for-cs` is an x86-64 binary.
+ROS 2 Jazzy and Gazebo Harmonic (and, via upstream's `install_dep.sh`, makes
+`clang++` the system `c++` through `update-alternatives` — its one machine-wide side
+effect), builds the core, builds this repository as a colcon overlay, and syncs the
+`uv` environment. Requirements: Ubuntu 24.04 (Jazzy) and **x86-64** — the shipped
+`physics/xdyn-for-cs` is an x86-64 binary.
 
 Scenario assets never get copied into the core: they reach gz through
 `lotusim --assets-path`.
 
 ### Everything else — Docker
 
-ROS and gz do not run natively on Apple Silicon, so the same stack runs in a
-container (`--platform linux/amd64`, under Rosetta). Any other Linux lands here too:
-`scripts/run_regatta.sh` routes on `install.sh`'s own rule — Ubuntu 24.04 **and**
-x86-64 — rather than on `uname -s`, because a Fedora host or an arm64 Ubuntu cannot
-run the native path either. Force either side with `RUNNER=native|docker`.
+The container replaces the userland `install.sh` would have built: Ubuntu 24.04,
+ROS Jazzy, the prebuilt core (`--platform linux/amd64`, because `xdyn-for-cs` is an
+x86-64 binary). On an x86-64 host — a Fedora, a Debian, an older Ubuntu — it runs
+natively; only a non-x86-64 CPU (Apple Silicon, arm64 Linux) adds an emulation
+layer, Rosetta or qemu. `scripts/run_regatta.sh` routes on `install.sh`'s own rule —
+Ubuntu 24.04 **and** x86-64 — rather than on `uname -s`, because a Fedora host or an
+arm64 Ubuntu cannot run the native path either. Force either side with
+`RUNNER=native|docker`.
 
 **Status: unverified since the harness was split.** The container gets by
 environment (`LOTUSIM_WS`, `LOTUSIM_PATH`, `PYTHONPATH`) what a native machine gets

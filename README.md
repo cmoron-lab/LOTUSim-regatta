@@ -1,13 +1,21 @@
 # LOTUSim-regatta
 
-A windward-leeward regatta for a Focus V2 RC sailboat on
-[LOTUSim](https://github.com/naval-group/LOTUSim) — Gazebo orchestrating, an
-external **xdyn** process computing every force over a websocket, ROS carrying the
-commands, and Unity or a web map rendering it.
+[![License: EPL-2.0](https://img.shields.io/badge/license-EPL--2.0-blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Ubuntu_24.04_x86--64-orange)](#not-on-ubuntu-2404-x86-64)
 
-A reference pilot sails the full lap around two buoys. **Replacing it with your own
-navigation algorithm is the point**: the physics is real enough that a boat cannot
-sail into the wind, has to tack, and loses speed when it does.
+A windward-leeward regatta for a 1 m RC sailboat, simulated for real: the boat
+cannot sail into the wind, has to tack, and loses speed when it does.
+
+<!-- Hero: drop a Unity capture at docs/media/regatta-unity.png (the boat on port
+     tack, windward buoy ahead), then uncomment:
+<p align="center"><img src="docs/media/regatta-unity.png" width="720"
+   alt="The Focus V2 beating toward the windward buoy, rendered in Unity"></p>
+-->
+
+Built on [LOTUSim](https://github.com/naval-group/LOTUSim): Gazebo orchestrates, an
+external **xdyn** process computes every force over a websocket, ROS carries the
+commands, Unity renders. A reference pilot sails the full lap around two buoys —
+**replacing it with your own navigation algorithm is the point.**
 
 ## Which door is yours
 
@@ -20,24 +28,29 @@ sail into the wind, has to tack, and loses speed when it does.
 
 ## Quickstart
 
-Ubuntu 24.04 including WSL2, x86-64. Once:
+Once:
 
 ```bash
-./install.sh          # writes nothing to your ~/.bashrc or ~/.zshrc
-. ./env.sh            # bash or zsh; the harness sources it by itself
+./install.sh          # ROS 2 Jazzy + Gazebo + the LOTUSim core + this overlay
+. ./env.sh            # puts that environment in YOUR shell, and says what it found
 ```
+
+Both are safe to re-run, and neither touches your `~/.bashrc` or `~/.zshrc` —
+which is why `env.sh` is sourced per shell rather than once and forgotten.
 
 Then, in increasing order of ceremony:
 
 ```bash
-uv run regatta-oracle                   # physics bench, no gz, no ROS  -> ORACLE PASS
-./scripts/run_regatta.sh 400 smoke      # full stack, headless, asserted -> SMOKE PASS
-./scripts/run_regatta.sh 900 hold       # a run to watch (~5 laps)
-UNITY=1 timeout 1000 bash scripts/run_regatta.sh 900 hold    # rendered in Unity
+uv run regatta-oracle                   # the physics alone, no gz, no ROS -> ORACLE PASS
+./scripts/run_regatta.sh 400 smoke      # the whole thing, asserted        -> SMOKE PASS
+./scripts/run_regatta.sh 900 hold       # the same run, left up to watch
+UNITY=1 ./scripts/run_regatta.sh 900 hold                    # rendered in Unity
 ```
 
-The numeric argument is a budget in **simulated** seconds, never wall seconds: a
-faster machine changes how long you wait, never the verdict.
+`smoke` counts in **simulated** seconds — a faster machine shortens the wait, never
+changes the verdict. `hold` counts in wall seconds, because it only sleeps.
+Everything else — the modes, the switches, the logs — is in
+`./scripts/run_regatta.sh -h`.
 
 ## Architecture
 
@@ -59,59 +72,49 @@ faster machine changes how long you wait, never the verdict.
                                                      → vessel_cmd_array
 ```
 
-- **gz orchestrates; it does not simulate.** Its own physics is off. Every force
-  comes from xdyn, an external process; the gz plugin is xdyn's websocket *client*.
-- **xdyn is stateless**: the complete vessel state round-trips on every
-  communication step. Nothing is remembered between calls.
-- **Two independent step sizes**: the communication step (`0.01` s) and xdyn's
-  internal integration step (`--dt 0.005`, `rk4`). `0.02` diverges — a numerical
-  requirement, not a preference.
+- **gz orchestrates; it does not simulate** — its own physics is off, every force comes from xdyn.
+- **xdyn is stateless** — the complete vessel state round-trips on every step.
+- **Two step sizes, neither tunable** — communication at `0.01` s, integration at `--dt 0.005`; `0.02` diverges.
 
-The rest — three frames, three unsynchronised clocks, and why each matters — is in
+Three frames, three unsynchronised clocks, and why each matters:
 [`docs/reference.md`](docs/reference.md).
 
 ## Repo map
 
 ```
-LOTUSim-regatta/
-├── install.sh                # Ubuntu 24.04 bring-up: core + overlay + uv + Unity bridge
-├── env.sh                    # the environment, sourceable from bash or zsh
-├── pyproject.toml            # the uv project: src/regatta, zero runtime deps
-├── src/regatta/              # PURE python, no ROS: pilot.py (the brain), xdyn.py
-│                             #   (co-sim client), oracle.py, probes/{helm,tap}.py
-├── src/regatta_agents/       # ROS2 package: helmsman.py, the node around the brain
-├── tests/                    # pytest for the pure core
-├── assets/{worlds,models}/   # regatta.world, regatta_buoy model
-├── assets/conditions/        # scenario wind, layered onto the core model by xdyn
-├── assets/blend/             # Blender sources (buoy, boat)
-├── unity/                    # C# scripts deployed into LOTUSim-Unity-modules
-├── scripts/                  # run_regatta.sh (entry point) + regatta_stack.sh (the
-│                             #   sequence), smoke_rounds_marks.py
-└── docs/                     # guide, reference, roadmap, design, measurements, archive
+install.sh  env.sh            bring-up, and the environment it brings up
+src/regatta/                  PURE python, stdlib only: pilot.py (the brain),
+                                xdyn.py (co-sim client), oracle.py, probes/
+src/regatta_agents/           the ROS2 edge: helmsman.py, the node around the brain
+scripts/                      run_regatta.sh (entry point, see -h) + the gz gate
+tests/                        pytest for the pure core
+assets/                       world, buoy model, scenario wind, Blender sources
+unity/                        C# scripts deployed into LOTUSim-Unity-modules
+docs/                         guide, reference, roadmap, design notes, measurements
 ```
 
-The split that matters: `src/regatta` needs **nothing but the Python standard
-library**, which is what lets it run without ROS installed — and lets the ROS node
-import it from the system interpreter. `rclpy` and `gz-transport` come from apt, not
-PyPI.
+The split that matters: `src/regatta` needs **nothing but the standard library**,
+which is what lets the ROS node import it from the system interpreter — `rclpy` and
+`gz-transport` come from apt, not PyPI.
 
 ## Upstream fixes (naval-group/LOTUSim)
 
 Found by diffing the round trip bit-for-bit between the offline oracle and the gz
-stack at each layer boundary.
+stack at each layer boundary — all three merged upstream 2026-07-13.
 
-| Issue / PR | Fix | Status |
-|---|---|---|
-| [#27](https://github.com/naval-group/LOTUSim/issues/27) / [#28](https://github.com/naval-group/LOTUSim/pull/28) | xdyn quaternion `j`/`k` swapped on receive — pre-existing, invisible at identity attitude | merged upstream 2026-07-13 |
-| [#32](https://github.com/naval-group/LOTUSim/issues/32) / [#33](https://github.com/naval-group/LOTUSim/pull/33) | NED↔ENU attitude conversion missing the FLU↔FRD body-frame swap — root cause of the boat not holding a beat | merged upstream 2026-07-13 |
-| [#34](https://github.com/naval-group/LOTUSim/issues/34) / [#35](https://github.com/naval-group/LOTUSim/pull/35) | co-sim `t` carried the step duration in ms instead of absolute sim time — freezes any time-dependent forcing (waves); prerequisite for swell | merged upstream 2026-07-13 |
+| Issue / PR | Fix |
+|---|---|
+| [#27](https://github.com/naval-group/LOTUSim/issues/27) / [#28](https://github.com/naval-group/LOTUSim/pull/28) | xdyn quaternion `j`/`k` swapped on receive — pre-existing, invisible at identity attitude |
+| [#32](https://github.com/naval-group/LOTUSim/issues/32) / [#33](https://github.com/naval-group/LOTUSim/pull/33) | NED↔ENU attitude conversion missing the FLU↔FRD body-frame swap — root cause of the boat not holding a beat |
+| [#34](https://github.com/naval-group/LOTUSim/issues/34) / [#35](https://github.com/naval-group/LOTUSim/pull/35) | co-sim `t` carried the step duration in ms instead of absolute sim time — freezes any time-dependent forcing; prerequisite for swell |
 
-## macOS, and any Linux that is not Ubuntu 24.04 x86-64
+## Not on Ubuntu 24.04 x86-64?
 
-ROS and gz do not run natively on Apple Silicon, so the same stack runs in a
-container under Rosetta; `scripts/run_regatta.sh` wraps itself whenever this machine
-is not what `install.sh` targets. **Currently unverified since the harness was
-split** — see
-[`docs/reference.md`](docs/reference.md) for the status and the image rebuild recipe.
+Anywhere docker runs, the same stack runs in an Ubuntu 24.04 container —
+`run_regatta.sh` wraps itself whenever this machine is not what `install.sh`
+targets. Another x86-64 Linux runs it natively; Apple Silicon and arm64 run it
+emulated (Rosetta/qemu), because `xdyn-for-cs` ships as an x86-64 binary. Currently
+unverified since the harness was split — status and image recipe in
+[`docs/reference.md`](docs/reference.md).
 
 License: EPL-2.0.

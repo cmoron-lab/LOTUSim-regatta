@@ -93,13 +93,14 @@ It writes **nothing** to your `~/.bashrc` or `~/.zshrc`. The environment lives i
 Then, in increasing order of ceremony:
 
 ```bash
-uv run regatta-oracle                   # the physics bench      (~10 min, ORACLE PASS)
-./scripts/run_regatta.sh 400 smoke      # the full stack, headless (~4 min, SMOKE PASS)
-./scripts/run_regatta.sh 900 hold       # a run to watch          (~5 laps)
+uv run regatta-oracle                   # the physics bench        (~10 min, ORACLE PASS)
+./scripts/run_regatta.sh 400 smoke      # the full stack, headless  (~4 min, SMOKE PASS)
+./scripts/run_regatta.sh 900 hold       # a run to watch     (15 min, laps depend on RTF)
 ```
 
-The argument is a budget in **simulated** seconds, not wall seconds — a faster
-machine changes how long you wait, never the result.
+The `smoke` argument is a budget in **simulated** seconds — a faster machine
+shortens the wait, never the result. `hold` counts wall seconds: it only keeps the
+simulation up. The rest is in `./scripts/run_regatta.sh -h`.
 
 To watch it on a map, bring up the LOTUSim web UI and open `http://localhost:5173`.
 The exact procedure, and the upstream defects you will meet, are in
@@ -169,8 +170,9 @@ Compare against the reference: it completes the lap in **189 simulated seconds w
 
 ### Two numbers you will want
 
-- **`--dt 0.005` is the integration step, and it is not adjustable.** `0.02`
-  diverges. If your run produces NaN, this is not where to look.
+- **The integration step is not a knob.** The full stack runs `--dt 0.005`, the
+  oracle `0.001` — finer is legal, coarser is not: `0.02` diverges. If your run
+  produces NaN, this is not where to look.
 - **A full lap is ~189 simulated seconds** offline, ~243 through the full stack —
   the difference is that the oracle starts with way on rather than from rest.
 

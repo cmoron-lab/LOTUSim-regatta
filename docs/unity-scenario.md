@@ -64,7 +64,7 @@ Source of truth is `unity/*.cs` in **this** repo; deployed copies live at
 ```
 
 First build ≈ 11 min (HDRP shader variants), then cached. Run flow is the same
-as the editor: start the stack (`UNITY=1 run_regatta.sh 900 hold`), then open
+as the editor: start the stack (`UNITY=1 ./scripts/run_regatta.sh 900 hold`), then open
 `Regatta.app` instead of pressing Play. Trap: editor-only code outside an
 `Editor/` folder compiles in the editor but breaks player builds (CS0246) —
 `LotusimConnectorEditor.cs` carries the `#if UNITY_EDITOR` guard for this.
@@ -72,7 +72,7 @@ as the editor: start the stack (`UNITY=1 run_regatta.sh 900 hold`), then open
 ## Launch order
 
 ```bash
-UNITY=1 timeout 1000 bash scripts/run_regatta.sh 900 hold
+UNITY=1 ./scripts/run_regatta.sh 900 hold
 ```
 
 `run_regatta.sh` starts the ROS-TCP endpoint **first**, before xdyn/helmsman/gz
