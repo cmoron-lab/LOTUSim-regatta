@@ -54,6 +54,40 @@ case "$-" in
     fi
     [ -f "$LOTUSIM_PATH/launch/bash_completion.sh" ] &&
       . "$LOTUSIM_PATH/launch/bash_completion.sh"
+
+    # Interactive only, for the same reason: a summary is reassurance for a person,
+    # and noise in the harness logs. Every line reports what was RESOLVED, not what
+    # was attempted -- "overlay built" means the setup file was actually there.
+    # Colours only on a tty, so `. ./env.sh > log` stays readable.
+    if [ -t 1 ]; then
+      _lr_g=$'\033[32m'; _lr_y=$'\033[33m'; _lr_d=$'\033[2m'; _lr_n=$'\033[0m'
+    else
+      _lr_g=; _lr_y=; _lr_d=; _lr_n=
+    fi
+    _lr_line() {  # <ok?0:1> <label> <value>
+      if [ "$1" = 0 ]; then
+        printf '  %s✓%s %-8s %s%s%s\n' "$_lr_g" "$_lr_n" "$2" "$_lr_d" "$3" "$_lr_n"
+      else
+        printf '  %s✗ %-8s %s%s\n' "$_lr_y" "$2" "$3" "$_lr_n"
+      fi
+    }
+    printf '\n%sLOTUSim regatta%s %s%s%s\n' "$_lr_g" "$_lr_n" "$_lr_d" "$_lr_root" "$_lr_n"
+    _lr_line 0 ROS "${ROS_DISTRO:-jazzy}"
+    _lr_line 0 "core ws" "$LOTUSIM_WS"
+    _lr_line 0 regatta "src/ on PYTHONPATH"
+    if [ -f "$_lr_root/install/setup.$_lr_ext" ]; then
+      _lr_line 0 overlay "built"
+    else
+      _lr_line 1 overlay "not built -- run ./install.sh"
+    fi
+    if command -v lotusim > /dev/null 2>&1; then
+      _lr_line 0 lotusim "$(command -v lotusim)"
+    else
+      _lr_line 1 lotusim "not on PATH -- run ./install.sh"
+    fi
+    printf '\n'
+    unset -f _lr_line
+    unset _lr_g _lr_y _lr_d _lr_n
     ;;
 esac
 
