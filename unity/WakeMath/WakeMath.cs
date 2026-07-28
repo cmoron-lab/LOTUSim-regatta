@@ -44,15 +44,4 @@ public static class WakeMath
         if (capacity <= 0) return 0;
         return (current + 1) % capacity;
     }
-
-    public static float WakeWidth(float speed, float refSpeed, float maxWidth)
-    {
-        return maxWidth > 0f ? maxWidth * SpeedFactor(speed, refSpeed) : 0f;
-    }
-
-    public static float SurfaceHeight(
-        float seaLevel, float offset, bool sampled, float waterHeight)
-    {
-        return (sampled ? waterHeight : seaLevel) + offset;
-    }
 }
