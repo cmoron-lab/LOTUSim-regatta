@@ -15,7 +15,7 @@ public class WakeEmitter : MonoBehaviour
     public float lifetime = 6f;
     public float smoothing = 0.15f;
 
-    const string ShaderName = "Regatta/Wake";
+    const string ShaderResource = "RegattaWake";
     const string FoamTextureProperty = "_MainTex";
     const int FoamTextureWidth = 128;
     const int FoamTextureHeight = 64;
@@ -41,10 +41,10 @@ public class WakeEmitter : MonoBehaviour
             return;
         }
 
-        var shader = Shader.Find(ShaderName);
+        var shader = Resources.Load<Shader>(ShaderResource);
         if (shader == null)
         {
-            Debug.LogError($"WakeEmitter: shader '{ShaderName}' not found — disabling.");
+            Debug.LogError($"WakeEmitter: shader resource '{ShaderResource}' not found — disabling.");
             enabled = false;
             return;
         }
