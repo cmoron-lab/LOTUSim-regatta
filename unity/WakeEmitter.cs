@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Cyril Moron — EPL-2.0
 // Continuous water-bound wake driven by the boat's own horizontal motion.
 using UnityEngine;
+using UnityEngine.Rendering.HighDefinition;
 
 public class WakeEmitter : MonoBehaviour
 {
@@ -14,8 +15,8 @@ public class WakeEmitter : MonoBehaviour
     public float lifetime = 6f;
     public float smoothing = 0.15f;
 
-    const string MaterialName = "RegattaSpray";
-    const string FoamTextureProperty = "Texture2D_23DD87FD";
+    const string ShaderName = "Regatta/Wake";
+    const string FoamTextureProperty = "_MainTex";
     const int FoamTextureWidth = 128;
     const int FoamTextureHeight = 64;
 
@@ -26,6 +27,7 @@ public class WakeEmitter : MonoBehaviour
     Transform _rudder;
     Material _mat;
     Texture2D _foam;
+    WaterSurface _water;
     Vector3 _lastPos;
     float _speed;
 
@@ -39,10 +41,10 @@ public class WakeEmitter : MonoBehaviour
             return;
         }
 
-        var src = Resources.Load<Material>(MaterialName);
-        if (src == null)
+        var shader = Shader.Find(ShaderName);
+        if (shader == null)
         {
-            Debug.LogError($"WakeEmitter: material '{MaterialName}' not found — disabling.");
+            Debug.LogError($"WakeEmitter: shader '{ShaderName}' not found — disabling.");
             enabled = false;
             return;
         }
@@ -55,7 +57,11 @@ public class WakeEmitter : MonoBehaviour
             return;
         }
 
-        _mat = new Material(src) { name = MaterialName + " (runtime)" };
+        _water = FindObjectOfType<WaterSurface>();
+        if (_water != null)
+            _water.cpuEvaluateRipples = true;
+
+        _mat = new Material(shader) { name = "Regatta Wake (runtime)" };
         _foam = BuildFoamTexture(FoamTextureWidth, FoamTextureHeight);
         if (!_mat.HasProperty(FoamTextureProperty))
         {
@@ -106,7 +112,7 @@ public class WakeEmitter : MonoBehaviour
         var trail = go.AddComponent<TrailRenderer>();
         trail.material = _mat;
         trail.alignment = LineAlignment.TransformZ;
-        trail.textureMode = LineTextureMode.Tile;
+        trail.textureMode = LineTextureMode.Stretch;
         trail.generateLightingData = true;
         trail.receiveShadows = false;
         trail.time = lifetime;
@@ -127,9 +133,9 @@ public class WakeEmitter : MonoBehaviour
                 new GradientColorKey(Color.white, 1f)
             },
             new[] {
-                new GradientAlphaKey(0f, 0f),
-                new GradientAlphaKey(0.55f, 0.15f),
-                new GradientAlphaKey(0.8f, 1f)
+                new GradientAlphaKey(0.85f, 0f),
+                new GradientAlphaKey(0.45f, 0.55f),
+                new GradientAlphaKey(0f, 1f)
             });
         trail.colorGradient = gradient;
         return trail;
@@ -138,7 +144,21 @@ public class WakeEmitter : MonoBehaviour
     void PlaceTrail()
     {
         Vector3 p = _rudder.position;
-        p.y = seaLevel + surfaceOffset;
+        bool sampled = false;
+        float waterHeight = 0f;
+        if (_water != null)
+        {
+            var search = new WaterSearchParameters {
+                targetPosition = p,
+                startPosition = p,
+                error = 0.01f,
+                maxIterations = 8
+            };
+            sampled = _water.FindWaterSurfaceHeight(search, out var result);
+            waterHeight = result.height;
+        }
+        p.y = WakeMath.SurfaceHeight(
+            seaLevel, surfaceOffset, sampled, waterHeight);
         _trail.transform.SetPositionAndRotation(p, FlatRotation);
     }
 
@@ -150,19 +170,17 @@ public class WakeEmitter : MonoBehaviour
             {
                 float u = (x + 0.5f) / width;
                 float v = (y + 0.5f) / height;
-                float left = Band(v, 0.22f, 0.16f);
-                float right = Band(v, 0.78f, 0.16f);
+                float shoulders = Mathf.Max(
+                    Band(v, 0.27f, 0.30f),
+                    Band(v, 0.73f, 0.30f));
                 float breakup = Mathf.Clamp01(
-                    0.55f +
-                    0.25f * Mathf.Sin(2f * Mathf.PI * (3f * u + v)) +
-                    0.20f * Mathf.Sin(2f * Mathf.PI * (7f * u - 2f * v)));
-                float edges = Mathf.Max(left, right) *
-                    Mathf.SmoothStep(0.15f, 0.85f, breakup);
-                float centre = 0.10f * Band(v, 0.5f, 0.30f) *
-                    (0.5f + 0.5f * Mathf.Sin(2f * Mathf.PI * 5f * u));
-                float a = Mathf.Clamp01(edges + centre);
+                    0.70f +
+                    0.18f * Mathf.Sin(2f * Mathf.PI * (1.5f * u + v)) +
+                    0.12f * Mathf.Sin(2f * Mathf.PI * (4f * u - 2f * v)));
+                float a = Band(v, 0.5f, 0.5f) *
+                    (0.25f + 0.65f * shoulders) * breakup;
                 a = a * a * (3f - 2f * a);
-                tex.SetPixel(x, y, new Color(a, a, a, a));
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
             }
         tex.Apply(updateMipmaps: true, makeNoLongerReadable: false);
         tex.wrapMode = TextureWrapMode.Repeat;

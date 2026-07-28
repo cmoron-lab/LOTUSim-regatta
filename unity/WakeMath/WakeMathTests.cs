@@ -32,4 +32,14 @@ public class WakeMathTests
         Assert.AreEqual(0f, WakeMath.SpeedFactor(1f, 0f), Eps);
         Assert.AreEqual(0f, WakeMath.WakeWidth(1f, RefSpeed, 0f), Eps);
     }
+
+    [TestCase(false, 0f, 0.005f)]
+    [TestCase(true, 0.08f, 0.085f)]
+    public void SurfaceHeightUsesWaterSampleWhenAvailable(
+        bool sampled, float waterHeight, float expected)
+    {
+        Assert.AreEqual(expected,
+                        WakeMath.SurfaceHeight(0f, 0.005f, sampled, waterHeight),
+                        Eps);
+    }
 }
