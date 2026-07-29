@@ -6,6 +6,8 @@ import math
 import sys
 
 import bpy
+from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 
 SAILS = {
@@ -13,7 +15,6 @@ SAILS = {
     "Jib": {"ripple": 0.015},
 }
 SHAPES = ("FilledPort", "FilledStarboard", "RipplePort", "RippleStarboard")
-DETAIL_OFFSET = 0.0002
 CHORD_ROWS = {}
 
 
@@ -29,6 +30,120 @@ def chord_fraction(sail_name, y, height):
 
 def shape_key_names(sail):
     return set(sail.data.shape_keys.key_blocks.keys()) if sail.data.shape_keys else set()
+
+
+def sail_vertex_groups(sail):
+    base_materials = {
+        index
+        for index, material in enumerate(sail.data.materials)
+        if material and material.name == "focus_sail"
+    }
+    if not base_materials:
+        raise AssertionError(f"{sail.name}: focus_sail material missing")
+    base_vertices = {
+        index
+        for polygon in sail.data.polygons
+        if polygon.material_index in base_materials
+        for index in polygon.vertices
+    }
+    detail_vertices = {
+        index
+        for polygon in sail.data.polygons
+        if polygon.material_index not in base_materials
+        for index in polygon.vertices
+    } - base_vertices
+    if not detail_vertices:
+        raise AssertionError(f"{sail.name}: exclusive detail vertices missing")
+    return base_materials, base_vertices, detail_vertices
+
+
+def marking_surface(sail, source_x, base_materials, detail_vertices):
+    sail.data.calc_loop_triangles()
+    triangles = [
+        tuple(triangle.vertices)
+        for triangle in sail.data.loop_triangles
+        if sail.data.polygons[triangle.polygon_index].material_index in base_materials
+    ]
+    tree = BVHTree.FromPolygons(
+        [
+            Vector((source_x[index], vertex.co.y, vertex.co.z))
+            for index, vertex in enumerate(sail.data.vertices)
+        ],
+        triangles,
+        all_triangles=True,
+    )
+    if tree is None:
+        raise AssertionError(f"{sail.name}: cannot build sail surface")
+
+    surface_x = list(source_x)
+    directions = (Vector((1.0, 0.0, 0.0)), Vector((-1.0, 0.0, 0.0)))
+    for index in detail_vertices:
+        vertex = sail.data.vertices[index]
+        point = Vector((source_x[index], vertex.co.y, vertex.co.z))
+        hits = []
+        for direction in directions:
+            location, _, triangle, distance = tree.ray_cast(point, direction)
+            if location is not None:
+                hits.append((distance, triangle, location.x))
+        if hits:
+            surface_x[index] = min(hits)[2]
+            continue
+        location, _, _, _ = tree.find_nearest(point)
+        if location is None:
+            raise AssertionError(f"{sail.name}: cannot project detail vertex {index}")
+        surface_x[index] = location.x
+    return tuple(surface_x)
+
+
+def verify_authored_sail(sail):
+    expected = {"Basis", *SHAPES}
+    if shape_key_names(sail) != expected:
+        raise AssertionError(f"{sail.name}: unexpected shape keys {shape_key_names(sail)}")
+    base_materials, base_vertices, detail_vertices = sail_vertex_groups(sail)
+    keys = sail.data.shape_keys.key_blocks
+    basis = keys["Basis"]
+    filled_port = keys["FilledPort"]
+    filled_starboard = keys["FilledStarboard"]
+    starboard_x = tuple(vertex.co.x for vertex in filled_starboard.data)
+    starboard_surface = marking_surface(sail, starboard_x, base_materials, detail_vertices)
+    reconstructed_relief = tuple(
+        starboard_x[index] - starboard_surface[index] if index in detail_vertices else 0.0
+        for index in range(len(sail.data.vertices))
+    )
+    relief_values = [basis.data[index].co.x for index in detail_vertices]
+    relief_span = max(relief_values) - min(relief_values)
+    tolerance = max(1e-7, relief_span * 5e-5)
+    relief_errors = [
+        (abs(basis.data[index].co.x - relief), index)
+        for index, relief in enumerate(reconstructed_relief)
+    ]
+    maximum_error, maximum_index = max(relief_errors)
+    if maximum_error > tolerance:
+        raise AssertionError(
+            f"{sail.name}: marking relief was not preserved "
+            f"(vertex {maximum_index}, error {maximum_error:.9f})"
+        )
+    if relief_span <= 1e-5:
+        raise AssertionError(f"{sail.name}: marking relief distribution was flattened")
+    if any(not math.isclose(basis.data[index].co.x, 0.0, abs_tol=1e-9) for index in base_vertices):
+        raise AssertionError(f"{sail.name}: cloth Basis is not fixed")
+    if any(
+        not math.isclose(
+            filled_port.data[index].co.x - basis.data[index].co.x,
+            -(filled_starboard.data[index].co.x - basis.data[index].co.x),
+            abs_tol=tolerance,
+        )
+        for index in range(len(sail.data.vertices))
+    ):
+        raise AssertionError(f"{sail.name}: camber is not opposed around marking relief")
+    print(
+        sail.name,
+        sorted(shape_key_names(sail)),
+        "detail vertices",
+        len(detail_vertices),
+        "relief span",
+        round(relief_span, 9),
+    )
 
 
 def write_inventory(path):
@@ -65,30 +180,11 @@ def author_sail(sail_name, amplitude):
         if camber
         else tuple(vertex.co.x for vertex in sail.data.vertices)
     )
-    base_materials = {
-        index
-        for index, material in enumerate(sail.data.materials)
-        if material and material.name == "focus_sail"
-    }
-    if not base_materials:
-        raise AssertionError(f"{sail_name}: focus_sail material missing")
-    base_vertices = {
-        index
-        for polygon in sail.data.polygons
-        if polygon.material_index in base_materials
-        for index in polygon.vertices
-    }
-    detail_vertices = {
-        index
-        for polygon in sail.data.polygons
-        if polygon.material_index not in base_materials
-        for index in polygon.vertices
-    } - base_vertices
-    if not detail_vertices:
-        raise AssertionError(f"{sail_name}: exclusive detail vertices missing")
+    base_materials, _, detail_vertices = sail_vertex_groups(sail)
+    surface_x = marking_surface(sail, original_x, base_materials, detail_vertices)
     basis_offsets = tuple(
-        clamp(value, -DETAIL_OFFSET, DETAIL_OFFSET) if index in detail_vertices else 0.0
-        for index, value in enumerate(original_x)
+        original_x[index] - surface_x[index] if index in detail_vertices else 0.0
+        for index in range(len(sail.data.vertices))
     )
     z_min = min(vertex.co.z for vertex in sail.data.vertices)
     z_max = max(vertex.co.z for vertex in sail.data.vertices)
@@ -117,7 +213,7 @@ def author_sail(sail_name, amplitude):
     ripple_starboard = sail.shape_key_add(name="RippleStarboard", from_mix=False)
     anchors = []
 
-    for index, (co, original) in enumerate(zip(basis.data, original_x, strict=True)):
+    for index, co in enumerate(basis.data):
         height = clamp((co.co.z - z_min) / (z_max - z_min), 0.0, 1.0)
         chord = chord_fraction(sail_name, co.co.y, height)
         envelope = math.sin(math.pi * height) * chord * chord
@@ -131,14 +227,11 @@ def author_sail(sail_name, amplitude):
             ripple_port.data[index].co.x = basis_offset
             ripple_starboard.data[index].co.x = basis_offset
         else:
-            filled_port.data[index].co.x = -original
-            filled_starboard.data[index].co.x = original
+            filled_port.data[index].co.x = -surface_x[index] + basis_offset
+            filled_starboard.data[index].co.x = surface_x[index] + basis_offset
             ripple_port.data[index].co.x = basis_offset - ripple
             ripple_starboard.data[index].co.x = basis_offset + ripple
 
-    expected = {"Basis", *SHAPES}
-    if shape_key_names(sail) != expected:
-        raise AssertionError(f"{sail_name}: unexpected shape keys {shape_key_names(sail)}")
     if tuple(sail.location) != original_origin or tuple(sail.data.materials) != original_materials:
         raise AssertionError(f"{sail_name}: origin or material slots changed")
     if any(
@@ -146,27 +239,19 @@ def author_sail(sail_name, amplitude):
         for index, key in enumerate(basis.data)
     ):
         raise AssertionError(f"{sail_name}: Basis offsets changed")
-    if not any(
-        not math.isclose(basis.data[index].co.x, 0.0, abs_tol=1e-9) for index in detail_vertices
+    if any(
+        not math.isclose(surface_x[index] + basis_offsets[index], original_x[index], abs_tol=1e-9)
+        for index in detail_vertices
     ):
-        raise AssertionError(f"{sail_name}: detail Basis separation is zero")
+        raise AssertionError(f"{sail_name}: marking relief reconstruction changed")
     if not anchors:
         raise AssertionError(f"{sail_name}: no fixed anchors")
-    anchor_set = set(anchors)
     for key in (filled_port, filled_starboard, ripple_port, ripple_starboard):
         if any(
             not math.isclose(key.data[index].co.x, basis.data[index].co.x, abs_tol=1e-9)
             for index in anchors
         ):
             raise AssertionError(f"{sail_name}: shape key moved an anchor")
-    if any(
-        not math.isclose(port.co.x, -starboard.co.x, abs_tol=1e-9)
-        for index, (port, starboard) in enumerate(
-            zip(filled_port.data, filled_starboard.data, strict=True)
-        )
-        if index not in anchor_set
-    ):
-        raise AssertionError(f"{sail_name}: filled keys are not opposed")
     if not any(abs(key.co.x) > 1e-6 for key in filled_starboard.data):
         raise AssertionError(f"{sail_name}: filled camber is not visible")
     if not any(
@@ -174,15 +259,21 @@ def author_sail(sail_name, amplitude):
         for index, key in enumerate(ripple_starboard.data)
     ):
         raise AssertionError(f"{sail_name}: ripple is not visible")
-    print(sail_name, sorted(shape_key_names(sail)), "detail vertices", len(detail_vertices))
+    verify_authored_sail(sail)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--inventory")
     parser.add_argument("--output-fbx")
+    parser.add_argument("--verify-fbx")
     arguments = parser.parse_args(sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else [])
 
+    if arguments.verify_fbx:
+        bpy.ops.import_scene.fbx(filepath=arguments.verify_fbx)
+        for sail_name in SAILS:
+            verify_authored_sail(bpy.data.objects[sail_name])
+        return
     if arguments.inventory:
         write_inventory(arguments.inventory)
         if not arguments.output_fbx:
