@@ -13,6 +13,7 @@ SAILS = {
     "Jib": {"ripple": 0.015},
 }
 SHAPES = ("FilledPort", "FilledStarboard", "RipplePort", "RippleStarboard")
+DETAIL_OFFSET = 0.0002
 CHORD_ROWS = {}
 
 
@@ -64,6 +65,31 @@ def author_sail(sail_name, amplitude):
         if camber
         else tuple(vertex.co.x for vertex in sail.data.vertices)
     )
+    base_materials = {
+        index
+        for index, material in enumerate(sail.data.materials)
+        if material and material.name == "focus_sail"
+    }
+    if not base_materials:
+        raise AssertionError(f"{sail_name}: focus_sail material missing")
+    base_vertices = {
+        index
+        for polygon in sail.data.polygons
+        if polygon.material_index in base_materials
+        for index in polygon.vertices
+    }
+    detail_vertices = {
+        index
+        for polygon in sail.data.polygons
+        if polygon.material_index not in base_materials
+        for index in polygon.vertices
+    } - base_vertices
+    if not detail_vertices:
+        raise AssertionError(f"{sail_name}: exclusive detail vertices missing")
+    basis_offsets = tuple(
+        clamp(value, -DETAIL_OFFSET, DETAIL_OFFSET) if index in detail_vertices else 0.0
+        for index, value in enumerate(original_x)
+    )
     z_min = min(vertex.co.z for vertex in sail.data.vertices)
     z_max = max(vertex.co.z for vertex in sail.data.vertices)
     if math.isclose(z_min, z_max):
@@ -81,8 +107,8 @@ def author_sail(sail_name, amplitude):
 
     while sail.data.shape_keys:
         sail.shape_key_remove(sail.data.shape_keys.key_blocks[-1])
-    for vertex in sail.data.vertices:
-        vertex.co.x = 0.0
+    for vertex, offset in zip(sail.data.vertices, basis_offsets, strict=True):
+        vertex.co.x = offset
 
     basis = sail.shape_key_add(name="Basis", from_mix=False)
     filled_port = sail.shape_key_add(name="FilledPort", from_mix=False)
@@ -96,28 +122,37 @@ def author_sail(sail_name, amplitude):
         chord = chord_fraction(sail_name, co.co.y, height)
         envelope = math.sin(math.pi * height) * chord * chord
         ripple = amplitude * envelope * math.sin(3.0 * math.pi * height)
+        basis_offset = basis_offsets[index]
         anchored = math.isclose(envelope, 0.0, abs_tol=1e-9)
         if anchored:
             anchors.append(index)
-            filled_port.data[index].co.x = 0.0
-            filled_starboard.data[index].co.x = 0.0
-            ripple_port.data[index].co.x = 0.0
-            ripple_starboard.data[index].co.x = 0.0
+            filled_port.data[index].co.x = basis_offset
+            filled_starboard.data[index].co.x = basis_offset
+            ripple_port.data[index].co.x = basis_offset
+            ripple_starboard.data[index].co.x = basis_offset
         else:
             filled_port.data[index].co.x = -original
             filled_starboard.data[index].co.x = original
-            ripple_port.data[index].co.x = -ripple
-            ripple_starboard.data[index].co.x = ripple
+            ripple_port.data[index].co.x = basis_offset - ripple
+            ripple_starboard.data[index].co.x = basis_offset + ripple
 
     expected = {"Basis", *SHAPES}
     if shape_key_names(sail) != expected:
         raise AssertionError(f"{sail_name}: unexpected shape keys {shape_key_names(sail)}")
     if tuple(sail.location) != original_origin or tuple(sail.data.materials) != original_materials:
         raise AssertionError(f"{sail_name}: origin or material slots changed")
-    if any(not math.isclose(key.co.x, 0.0, abs_tol=1e-9) for key in basis.data):
-        raise AssertionError(f"{sail_name}: Basis is not flat")
+    if any(
+        not math.isclose(key.co.x, basis_offsets[index], abs_tol=1e-9)
+        for index, key in enumerate(basis.data)
+    ):
+        raise AssertionError(f"{sail_name}: Basis offsets changed")
+    if not any(
+        not math.isclose(basis.data[index].co.x, 0.0, abs_tol=1e-9) for index in detail_vertices
+    ):
+        raise AssertionError(f"{sail_name}: detail Basis separation is zero")
     if not anchors:
         raise AssertionError(f"{sail_name}: no fixed anchors")
+    anchor_set = set(anchors)
     for key in (filled_port, filled_starboard, ripple_port, ripple_starboard):
         if any(
             not math.isclose(key.data[index].co.x, basis.data[index].co.x, abs_tol=1e-9)
@@ -126,14 +161,20 @@ def author_sail(sail_name, amplitude):
             raise AssertionError(f"{sail_name}: shape key moved an anchor")
     if any(
         not math.isclose(port.co.x, -starboard.co.x, abs_tol=1e-9)
-        for port, starboard in zip(filled_port.data, filled_starboard.data, strict=True)
+        for index, (port, starboard) in enumerate(
+            zip(filled_port.data, filled_starboard.data, strict=True)
+        )
+        if index not in anchor_set
     ):
         raise AssertionError(f"{sail_name}: filled keys are not opposed")
     if not any(abs(key.co.x) > 1e-6 for key in filled_starboard.data):
         raise AssertionError(f"{sail_name}: filled camber is not visible")
-    if not any(abs(key.co.x) > 1e-6 for key in ripple_starboard.data):
+    if not any(
+        abs(key.co.x - basis.data[index].co.x) > 1e-6
+        for index, key in enumerate(ripple_starboard.data)
+    ):
         raise AssertionError(f"{sail_name}: ripple is not visible")
-    print(sail_name, sorted(shape_key_names(sail)))
+    print(sail_name, sorted(shape_key_names(sail)), "detail vertices", len(detail_vertices))
 
 
 def main():
