@@ -1,7 +1,7 @@
 # Unity native water-foam spike
 
 **Date:** 2026-07-29
-**Status:** approved direction, pending written-spec review
+**Status:** spike accepted; production migration pending
 
 ## Why
 
