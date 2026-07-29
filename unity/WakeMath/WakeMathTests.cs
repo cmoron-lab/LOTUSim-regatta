@@ -157,3 +157,63 @@ public class ManualHelmDecisionTests
                 "ShouldUseDefaultBinding", saved, path, sign, span));
     }
 }
+
+[TestFixture]
+public class SailVisualMathTests
+{
+    const float Eps = 1e-4f;
+
+    [Test]
+    public void ApparentWindSubtractsBoatVelocity()
+    {
+        Assert.AreEqual(
+            new Vector3(-0.5f, 0f, -3f),
+            SailVisualMath.ApparentWind(
+                new Vector3(0f, 0f, -3f),
+                new Vector3(0.5f, 0f, 0f)));
+    }
+
+    [Test]
+    public void CorrectlyTrimmedSailFills()
+    {
+        Vector2 state = SailVisualMath.Response(
+            3f, 60f, SailVisualMath.OptimalSheet(60f));
+        Assert.Greater(state.x, 0.95f);
+        Assert.Less(state.y, Eps);
+    }
+
+    [TestCase(5f, 4f)]
+    [TestCase(60f, 70f)]
+    public void HeadToWindOrOverEasedSailLuffs(float angle, float sheet)
+    {
+        Vector2 state = SailVisualMath.Response(3f, angle, sheet);
+        Assert.Less(state.x, 0.05f);
+        Assert.Greater(state.y, 0.95f);
+    }
+
+    [Test]
+    public void NoWindProducesNoDeformation()
+    {
+        Assert.AreEqual(Vector2.zero,
+            SailVisualMath.Response(0f, 60f, 11f));
+    }
+
+    [Test]
+    public void DownwindTrimStaysFilled()
+    {
+        Vector2 state = SailVisualMath.Response(3f, 180f, 80f);
+        Assert.Greater(state.x, 0.95f);
+        Assert.Less(state.y, Eps);
+    }
+
+    [Test]
+    public void RippleWeightsStayBoundedByLuff()
+    {
+        for (int i = 0; i < 100; ++i)
+        {
+            Vector2 weights = SailVisualMath.RippleWeights(0.6f, i * 0.2f);
+            Assert.That(weights.x, Is.InRange(0f, 0.6f));
+            Assert.That(weights.y, Is.InRange(0f, 0.6f));
+        }
+    }
+}
