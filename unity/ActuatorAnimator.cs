@@ -24,14 +24,29 @@ public class ActuatorAnimator : MonoBehaviour
     public float rudderSlew = 180f;  // deg/s
     public float sailSign = 1f;      // flip live if the boom sits to windward
     public float rudderSign = 1f;    // flip live if the rudder kicks the wrong way
+    public float windFromDeg = 0f;
+    public float windSpeed = 3f;
+    public float maxPoseStep = 0.25f;
+    public float velocitySmoothing = 0.15f;
+    public float tackLuffTime = 0.65f;
+    public float flutterHz = 4f;
 
     static readonly Regex SheetRe = new Regex(@"""mainsail\(sheet\)""\s*:\s*(-?[\d.eE+-]+)");
     static readonly Regex HelmRe = new Regex(@"""rudder\(helm\)""\s*:\s*(-?[\d.eE+-]+)");
 
-    Transform _boom, _mainsail, _rudder, _hull, _bow;
+    Transform _boom, _mainsail, _jib, _rudder, _hull, _bow;
+    SkinnedMeshRenderer _mainsailRenderer, _jibRenderer;
+    int[] _mainsailShapes, _jibShapes;
     float _sheetDeg, _helmDeg;       // latest commanded magnitudes (deg)
     float _sailAngle, _rudderAngle;  // currently displayed local Y angles (deg)
+    Vector3 _lastPosition, _boatVelocity;
+    float _lastStableSide = 1f, _tackLuffAge, _flutterPhase;
+    bool _hasStableSide;
     Quaternion _boomRest, _sailRest, _rudderRest;
+
+    static readonly string[] SailShapeNames = {
+        "FilledPort", "FilledStarboard", "RipplePort", "RippleStarboard"
+    };
 
     // Read by WakeEmitter: spares a second subscription and a duplicate parse.
     public float RudderAngle => _rudderAngle;
@@ -53,9 +68,14 @@ public class ActuatorAnimator : MonoBehaviour
     {
         _boom = FindPart("Boom");
         _mainsail = FindPart("Mainsail");
+        _jib = FindPart("Jib");
         _rudder = FindPart("Rudder");
         _hull = FindPart("Hull");
         _bow = FindPart("BowNose");
+        _lastPosition = transform.position;
+        _tackLuffAge = tackLuffTime;
+        ResolveSailShapes(_mainsail, "Mainsail", out _mainsailRenderer, out _mainsailShapes);
+        ResolveSailShapes(_jib, "Jib", out _jibRenderer, out _jibShapes);
         if (_boom) _boomRest = _boom.localRotation;
         if (_mainsail) _sailRest = _mainsail.localRotation;
         if (_rudder) _rudderRest = _rudder.localRotation;
@@ -97,15 +117,40 @@ public class ActuatorAnimator : MonoBehaviour
 
     void Update()
     {
-        // Bearing of the bow vs wind (from world +Z): >0 = bow east of north =
-        // wind on the port side = boom to starboard (positive local yaw).
-        float side = 1f;
-        if (_hull && _bow)
+        Vector3 delta = transform.position - _lastPosition;
+        _lastPosition = transform.position;
+        delta.y = 0f;
+        if (delta.magnitude > maxPoseStep)
+            _boatVelocity = Vector3.zero;
+        else
+            _boatVelocity = Vector3.Lerp(
+                _boatVelocity,
+                Time.deltaTime > 0f ? delta / Time.deltaTime : Vector3.zero,
+                velocitySmoothing > 0f
+                    ? Mathf.Clamp01(Time.deltaTime / velocitySmoothing)
+                    : 1f);
+
+        Vector3 trueAir = Quaternion.Euler(0f, windFromDeg, 0f)
+            * Vector3.back * windSpeed;
+        Vector3 apparent = SailVisualMath.ApparentWind(trueAir, _boatVelocity);
+        Vector3 windFrom = apparent.sqrMagnitude > 1e-6f
+            ? -apparent.normalized
+            : Vector3.zero;
+        Vector3 bowAxis = BowAxis;
+        float side = _lastStableSide;
+        float windAngle = 0f;
+        if (windFrom != Vector3.zero && bowAxis != Vector3.zero)
         {
-            Vector3 fwd = _bow.position - _hull.position;
-            fwd.y = 0f;
-            if (fwd.sqrMagnitude > 1e-6f)
-                side = Mathf.Sign(Vector3.SignedAngle(Vector3.forward, fwd, Vector3.up));
+            windAngle = Vector3.SignedAngle(windFrom, bowAxis, Vector3.up);
+            if (Mathf.Abs(windAngle) > 5f)
+            {
+                float stableSide = Mathf.Sign(windAngle);
+                if (_hasStableSide && stableSide != _lastStableSide)
+                    _tackLuffAge = 0f;
+                _lastStableSide = stableSide;
+                _hasStableSide = true;
+                side = stableSide;
+            }
         }
         BoomSide = side;
 
@@ -129,6 +174,54 @@ public class ActuatorAnimator : MonoBehaviour
         if (_boom) _boom.localRotation = sailRot * _boomRest;
         if (_mainsail) _mainsail.localRotation = sailRot * _sailRest;
         if (_rudder) _rudder.localRotation = Quaternion.AngleAxis(_rudderAngle, Vector3.up) * _rudderRest;
+
+        _tackLuffAge += Time.deltaTime;
+        float tackLuff = tackLuffTime > 0f
+            ? 1f - Mathf.Clamp01(_tackLuffAge / tackLuffTime)
+            : 0f;
+        Vector2 response = SailVisualMath.Response(
+            apparent.magnitude, windAngle, sheetDeg);
+        float fill = response.x * (1f - tackLuff);
+        float luff = Mathf.Max(response.y, tackLuff);
+        _flutterPhase += Time.deltaTime * flutterHz * Mathf.PI * 2f;
+        ApplySailShapes(_mainsailRenderer, _mainsailShapes, fill,
+            SailVisualMath.RippleWeights(luff, _flutterPhase), side);
+        ApplySailShapes(_jibRenderer, _jibShapes, fill,
+            SailVisualMath.RippleWeights(
+                Mathf.Clamp01(luff * 1.15f), _flutterPhase * 1.23f + 0.4f), side);
+    }
+
+    void ResolveSailShapes(Transform sail, string sailName,
+        out SkinnedMeshRenderer renderer, out int[] shapes)
+    {
+        renderer = sail ? sail.GetComponentInChildren<SkinnedMeshRenderer>() : null;
+        shapes = null;
+        if (!renderer || renderer.sharedMesh == null)
+        {
+            Debug.LogWarning($"ActuatorAnimator: '{sailName}' blend shapes unavailable");
+            return;
+        }
+        shapes = new int[SailShapeNames.Length];
+        for (int i = 0; i < shapes.Length; ++i)
+        {
+            shapes[i] = renderer.sharedMesh.GetBlendShapeIndex(SailShapeNames[i]);
+            if (shapes[i] < 0)
+            {
+                Debug.LogWarning($"ActuatorAnimator: '{sailName}' missing blend shape '{SailShapeNames[i]}'");
+                shapes = null;
+                return;
+            }
+        }
+    }
+
+    static void ApplySailShapes(SkinnedMeshRenderer renderer, int[] shapes,
+        float fill, Vector2 ripple, float side)
+    {
+        if (renderer == null || shapes == null) return;
+        renderer.SetBlendShapeWeight(shapes[0], side < 0f ? fill * 100f : 0f);
+        renderer.SetBlendShapeWeight(shapes[1], side > 0f ? fill * 100f : 0f);
+        renderer.SetBlendShapeWeight(shapes[2], ripple.x * 100f);
+        renderer.SetBlendShapeWeight(shapes[3], ripple.y * 100f);
     }
 
     Transform FindPart(string name)
