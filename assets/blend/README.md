@@ -14,7 +14,8 @@ focus_v2.blend then File > External Data > Make Paths Relative — the texture
 path is currently absolute. `focus_v2.baseline.blend` is a historical reference
 copy.
 
-Regenerate the sail shape keys and Unity FBX:
+Regenerate the sail shape keys and Unity FBX with Blender 4.5.11 LTS or newer
+(do not save this source with Blender 4.5.0):
 
 ```bash
 blender --background assets/blend/focus_v2.blend --python assets/blend/author_sail_shapes.py -- --output-fbx /mnt/c/Users/cyril/lotusim-unity/Assets/models/focus_v2/mesh/focus_v2.fbx
