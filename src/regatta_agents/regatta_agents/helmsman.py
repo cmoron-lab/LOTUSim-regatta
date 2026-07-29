@@ -4,6 +4,8 @@ regatta_agents.pilot.Pilot (offline-validated). Seeds a neutral setpoint on star
 
 import json
 import math
+import time
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
@@ -50,6 +52,19 @@ class Helmsman(Node):
         self.pub = self.create_publisher(VesselCmdArray, f"/{self.world}/vessel_cmd_array", qos)
         self._publish(opt_sheet(0.0), 0.0)  # seed neutral so xdyn has a command
 
+        # Manual override from Unity (ManualHelm.cs), same message shape. Presence IS
+        # the mode: a fresh manual command wins, silence hands the helm back to the
+        # Pilot. Dead-man switch on purpose -- if Unity dies mid-manual, the algo
+        # resumes instead of freezing the boat on its last command. Default QoS
+        # (volatile): TRANSIENT_LOCAL would replay a stale manual command after a
+        # restart and steal the helm for one timeout window.
+        self.manual_timeout = p("manual_timeout_s", 0.5).value
+        self._manual = None
+        self._manual_t = float("-inf")
+        self.create_subscription(
+            VesselCmdArray, f"/{self.world}/manual_cmd_array", self._on_manual, 10
+        )
+
         if _HAVE_GZ:
             self.gz = GzNode()
             self.gz.subscribe(Pose_V, f"/world/{self.world}/dynamic_pose/info", self._on_pose)
@@ -79,8 +94,28 @@ class Helmsman(Node):
                     ) / (t - self._prev_t)
                 self.yaw, self._prev_yaw, self._prev_t = yaw, yaw, t
 
+    def _on_manual(self, msg):
+        for c in msg.cmds:
+            if c.vessel_name and c.vessel_name != self.vessel:
+                continue
+            try:
+                d = json.loads(c.cmd_string)
+                pair = float(d["mainsail(sheet)"]), float(d["rudder(helm)"])
+            except (ValueError, KeyError, TypeError) as exc:
+                # A malformed frame must not crash the only command publisher, but
+                # silence would hide a broken key mapping: log and drop.
+                self.get_logger().warning(f"bad manual cmd {c.cmd_string!r}: {exc}")
+                return
+            self._manual = pair
+            self._manual_t = time.monotonic()
+
     def _control(self):
+        # The Pilot runs even under manual override: its state machine keeps
+        # tracking the boat (legs, roundings), so taking the helm back mid-course
+        # resumes sensibly instead of steering for a mark already passed.
         sheet, helm = self.pilot.update(self.x, self.y, self.yaw, self.r)
+        if self._manual is not None and time.monotonic() - self._manual_t < self.manual_timeout:
+            sheet, helm = self._manual
         self._publish(sheet, helm)
 
     def _publish(self, sheet, helm):

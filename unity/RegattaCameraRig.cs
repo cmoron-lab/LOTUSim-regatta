@@ -13,17 +13,27 @@ public class RegattaCameraRig : MonoBehaviour
     public string targetName = "focus_v2";           // fallback if no animator found
     public float chaseDistance = 2.2f, chaseHeight = 1.0f;
     public float orbitDistance = 3f;
-    public Vector3 helmOffset = new Vector3(0f, 0.22f, -0.42f); // up, back from motion
+    public Vector3 helmOffset = new Vector3(0f, 0.16f, -0.60f); // up, back from motion:
+                                                                // at the tiller, astern
     public float freeSpeed = 3f;
 
     enum Mode { Chase, Orbit, Onboard, Free }
     Mode _mode = Mode.Chase;
     Transform _target;
+    ActuatorAnimator _anim;
     Vector3 _dir = Vector3.forward;
     Vector3 _lastPos, _vel;
     float _orbitYaw = 45f, _orbitPitch = 25f;
     float _lookYaw, _lookPitch;                      // drag offset for Chase/Onboard
     float _freeYaw, _freePitch;
+
+    void Start()
+    {
+        // A 1 m boat: the default 0.3 m near plane slices away whatever sits in
+        // front of the ONBOARD camera. 2 cm keeps the deck.
+        var cam = GetComponent<Camera>();
+        if (cam) cam.nearClipPlane = 0.02f;
+    }
 
     void LateUpdate()
     {
@@ -33,6 +43,7 @@ public class RegattaCameraRig : MonoBehaviour
             var go = anim != null ? anim.gameObject
                      : GameObject.Find(targetName) ?? GameObject.Find(targetName + "(Clone)");
             if (go == null) return;
+            _anim = anim;
             _target = go.transform;
             _lastPos = _target.position;
         }
@@ -51,10 +62,17 @@ public class RegattaCameraRig : MonoBehaviour
             Cursor.visible = _mode != Mode.Free;
         }
 
+        // "Behind the boat" means behind the BOW AXIS, racing-game style: leeway
+        // and tacks make the track differ from the heading, and following the
+        // motion direction films the side of a boat that just tacked. Heading
+        // from the hull geometry when available, motion as the fallback.
         Vector3 delta = _target.position - _lastPos;
         _lastPos = _target.position;
         delta.y = 0f;
-        if (delta.sqrMagnitude > 1e-10f)
+        Vector3 bow = _anim ? _anim.BowAxis : Vector3.zero;
+        if (bow != Vector3.zero)
+            _dir = Vector3.Slerp(_dir, bow, 0.15f);
+        else if (delta.sqrMagnitude > 1e-10f)
             _dir = Vector3.Slerp(_dir, delta.normalized, 0.05f);
 
         float scroll = Input.GetAxis("Mouse ScrollWheel");
@@ -127,7 +145,9 @@ public class RegattaCameraRig : MonoBehaviour
 
     void OnGUI()
     {
-        GUI.Label(new Rect(10, 10, 560, 24),
+        // y=70: the ROS-TCP connector draws its connection HUD in the top-left
+        // corner; sitting at y=10 put this line straight underneath it.
+        GUI.Label(new Rect(10, 70, 560, 24),
             $"[C] camera: {_mode} | v3 | " +
             (_target == null ? "waiting for boat..." : $"target: {_target.name}") +
             "  (RMB-drag: look, wheel: zoom/speed)");

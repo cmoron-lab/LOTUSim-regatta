@@ -33,6 +33,22 @@ public class ActuatorAnimator : MonoBehaviour
     float _sailAngle, _rudderAngle;  // currently displayed local Y angles (deg)
     Quaternion _boomRest, _sailRest, _rudderRest;
 
+    // Read by WakeEmitter: spares a second subscription and a duplicate parse.
+    public float RudderAngle => _rudderAngle;
+
+    // Read by RegattaCameraRig: the hull's bow axis (Hull -> BowNose), flattened.
+    // Convention-free like the sail-side test below; zero until the parts exist.
+    public Vector3 BowAxis
+    {
+        get
+        {
+            if (!_hull || !_bow) return Vector3.zero;
+            Vector3 f = _bow.position - _hull.position;
+            f.y = 0f;
+            return f.sqrMagnitude > 1e-6f ? f.normalized : Vector3.zero;
+        }
+    }
+
     void Start()
     {
         _boom = FindPart("Boom");
@@ -62,6 +78,23 @@ public class ActuatorAnimator : MonoBehaviour
         }
     }
 
+    // Read by ManualHelm's boom-side sheet mapping: +1 = boom to starboard.
+    public float BoomSide { get; private set; } = 1f;
+
+    float _ovrSheetDeg, _ovrHelmDeg, _ovrAt = -1f;
+
+    // ManualHelm feeds its LOCAL command here every frame while manual: the boom
+    // then follows the hand instead of the Unity->WSL->helmsman round trip, whose
+    // 30 Hz beats against this side's 30 Hz and clumps into visible jerks. The
+    // physics still gets the round trip; only the rendering takes the shortcut --
+    // and this animator was already rendering the command, never the simulation.
+    public void SetLocalCmd(float sheetDeg, float helmDeg)
+    {
+        _ovrSheetDeg = sheetDeg;
+        _ovrHelmDeg = helmDeg;
+        _ovrAt = Time.time;
+    }
+
     void Update()
     {
         // Bearing of the bow vs wind (from world +Z): >0 = bow east of north =
@@ -74,10 +107,22 @@ public class ActuatorAnimator : MonoBehaviour
             if (fwd.sqrMagnitude > 1e-6f)
                 side = Mathf.Sign(Vector3.SignedAngle(Vector3.forward, fwd, Vector3.up));
         }
+        BoomSide = side;
 
-        float sailTarget = sailSign * side * _sheetDeg;
-        float rudderTarget = rudderSign * _helmDeg;
-        _sailAngle = Mathf.MoveTowardsAngle(_sailAngle, sailTarget, sailSlew * Time.deltaTime);
+        float sheetDeg = _sheetDeg, helmDeg = _helmDeg;
+        if (_ovrAt >= 0f && Time.time - _ovrAt < 0.3f)
+        {
+            sheetDeg = _ovrSheetDeg;
+            helmDeg = _ovrHelmDeg;
+        }
+        float sailTarget = sailSign * side * sheetDeg;
+        float rudderTarget = rudderSign * helmDeg;
+        // Under a fresh local override the hand is already rate-limited by
+        // ManualHelm; keeping the full visual slew on top double-limits and the
+        // boom drags behind the stick. Doubled, not removed: the tack sweep
+        // (side flip) should still look like a boom crossing, not a teleport.
+        float slew = (_ovrAt >= 0f && Time.time - _ovrAt < 0.3f) ? sailSlew * 2f : sailSlew;
+        _sailAngle = Mathf.MoveTowardsAngle(_sailAngle, sailTarget, slew * Time.deltaTime);
         _rudderAngle = Mathf.MoveTowardsAngle(_rudderAngle, rudderTarget, rudderSlew * Time.deltaTime);
 
         var sailRot = Quaternion.AngleAxis(_sailAngle, Vector3.up);
