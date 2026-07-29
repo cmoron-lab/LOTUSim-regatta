@@ -1,0 +1,117 @@
+"""Author deterministic sail shape keys and export the Unity FBX."""
+
+import argparse
+import math
+import sys
+
+import bpy
+
+
+SAILS = {
+    "Mainsail": {"ripple": 0.018},
+    "Jib": {"ripple": 0.015},
+}
+SHAPES = ("FilledPort", "FilledStarboard", "RipplePort", "RippleStarboard")
+CHORD_ROWS = {}
+
+
+def clamp(value, lower, upper):
+    return max(lower, min(value, upper))
+
+
+def chord_fraction(sail_name, y, height):
+    rows = CHORD_ROWS[sail_name]
+    _, leech, luff = min(rows, key=lambda row: abs(row[0] - height))
+    return 0.0 if math.isclose(leech, luff) else clamp((luff - y) / (luff - leech), 0.0, 1.0)
+
+
+def shape_key_names(sail):
+    return set(sail.data.shape_keys.key_blocks.keys()) if sail.data.shape_keys else set()
+
+
+def author_sail(sail_name, amplitude):
+    sail = bpy.data.objects[sail_name]
+    original_origin = tuple(sail.location)
+    original_materials = tuple(sail.data.materials)
+    original_x = tuple(vertex.co.x for vertex in sail.data.vertices)
+    z_min = min(vertex.co.z for vertex in sail.data.vertices)
+    z_max = max(vertex.co.z for vertex in sail.data.vertices)
+    if math.isclose(z_min, z_max):
+        raise ValueError(f"{sail_name}: sail has no height")
+
+    samples = []
+    for vertex in sail.data.vertices:
+        height = clamp((vertex.co.z - z_min) / (z_max - z_min), 0.0, 1.0)
+        samples.append((height, vertex.co.y))
+    CHORD_ROWS[sail_name] = []
+    for step in range(101):
+        height = step / 100.0
+        ys = [y for sample_height, y in samples if abs(sample_height - height) <= 0.03]
+        CHORD_ROWS[sail_name].append((height, min(ys), max(ys)))
+
+    while sail.data.shape_keys:
+        sail.shape_key_remove(sail.data.shape_keys.key_blocks[-1])
+    for vertex in sail.data.vertices:
+        vertex.co.x = 0.0
+
+    basis = sail.shape_key_add(name="Basis", from_mix=False)
+    filled_port = sail.shape_key_add(name="FilledPort", from_mix=False)
+    filled_starboard = sail.shape_key_add(name="FilledStarboard", from_mix=False)
+    ripple_port = sail.shape_key_add(name="RipplePort", from_mix=False)
+    ripple_starboard = sail.shape_key_add(name="RippleStarboard", from_mix=False)
+    anchors = []
+
+    for index, (co, original) in enumerate(zip(basis.data, original_x, strict=True)):
+        height = clamp((co.co.z - z_min) / (z_max - z_min), 0.0, 1.0)
+        chord = chord_fraction(sail_name, co.co.y, height)
+        envelope = math.sin(math.pi * height) * chord * chord
+        ripple = amplitude * envelope * math.sin(3.0 * math.pi * height)
+        filled_port.data[index].co.x = -original
+        filled_starboard.data[index].co.x = original
+        ripple_port.data[index].co.x = -ripple
+        ripple_starboard.data[index].co.x = ripple
+        if math.isclose(envelope, 0.0, abs_tol=1e-9):
+            anchors.append(index)
+
+    expected = {"Basis", *SHAPES}
+    if shape_key_names(sail) != expected:
+        raise AssertionError(f"{sail_name}: unexpected shape keys {shape_key_names(sail)}")
+    if tuple(sail.location) != original_origin or tuple(sail.data.materials) != original_materials:
+        raise AssertionError(f"{sail_name}: origin or material slots changed")
+    if any(not math.isclose(key.co.x, 0.0, abs_tol=1e-9) for key in basis.data):
+        raise AssertionError(f"{sail_name}: Basis is not flat")
+    if not anchors:
+        raise AssertionError(f"{sail_name}: no fixed anchors")
+    for key in (ripple_port, ripple_starboard):
+        if any(
+            not math.isclose(key.data[index].co.x, basis.data[index].co.x, abs_tol=1e-9)
+            for index in anchors
+        ):
+            raise AssertionError(f"{sail_name}: ripple moved an anchor")
+    if not any(abs(key.co.x) > 1e-6 for key in ripple_starboard.data):
+        raise AssertionError(f"{sail_name}: ripple is not visible")
+    print(sail_name, sorted(shape_key_names(sail)))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output-fbx", required=True)
+    arguments = parser.parse_args(sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else [])
+
+    for sail_name, settings in SAILS.items():
+        author_sail(sail_name, settings["ripple"])
+
+    bpy.context.preferences.filepaths.save_version = 0
+    bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)
+    bpy.ops.export_scene.fbx(
+        filepath=arguments.output_fbx,
+        axis_forward="-Z",
+        axis_up="Y",
+        bake_space_transform=True,
+        path_mode="COPY",
+        add_leaf_bones=False,
+    )
+
+
+if __name__ == "__main__":
+    main()
