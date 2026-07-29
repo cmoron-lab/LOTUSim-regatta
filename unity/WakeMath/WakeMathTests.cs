@@ -17,6 +17,53 @@ public class WakeMathTests
         Assert.AreEqual(expected, WakeMath.SpeedFactor(speed, RefSpeed), Eps);
     }
 
+    [TestCase(0f, 0f)]
+    [TestCase(0.25f, 0.25f)]
+    [TestCase(0.5f, 1f)]
+    [TestCase(5f, 1f)]
+    public void WakeStrengthUsesQuadraticSpeedResponse(
+        float speed, float expected)
+    {
+        Assert.AreEqual(
+            expected, WakeMath.WakeStrength(speed, RefSpeed), Eps);
+    }
+
+    [TestCase(0f, 0.35f)]
+    [TestCase(0.25f, 1.675f)]
+    [TestCase(0.5f, 3f)]
+    [TestCase(5f, 3f)]
+    public void WakeLengthScalesWithSpeed(float speed, float expected)
+    {
+        Assert.AreEqual(
+            expected,
+            WakeMath.WakeLength(speed, RefSpeed, 0.35f, 3f),
+            Eps);
+    }
+
+    [TestCase(0f, 0f)]
+    [TestCase(0.1f, 0.25f)]
+    [TestCase(0.8f, 0.5123f)]
+    [TestCase(2f, 0.8f)]
+    public void WakePeriodFollowsDeepWaterDispersion(
+        float speed, float expected)
+    {
+        Assert.AreEqual(
+            expected, WakeMath.WakePeriod(speed, 0.25f, 0.8f), Eps);
+    }
+
+    [TestCase(0f, 0.02f, 0.25f, 0f)]
+    [TestCase(0.01f, 0.02f, 0.25f, 0.5f)]
+    [TestCase(0.3f, 0.02f, 0.25f, 0f)]
+    [TestCase(0.01f, 0f, 0.25f, 0f)]
+    public void MotionSpeedRejectsInvalidAndTeleportSteps(
+        float distance, float deltaTime, float maxStep, float expected)
+    {
+        Assert.AreEqual(
+            expected,
+            WakeMath.MotionSpeed(distance, deltaTime, maxStep),
+            Eps);
+    }
+
     [TestCase(0.11f, 0.12f, 0.5f, 0.03f, false)]
     [TestCase(0.12f, 0.12f, 0.02f, 0.03f, false)]
     [TestCase(0.12f, 0.12f, 0.03f, 0.03f, true)]

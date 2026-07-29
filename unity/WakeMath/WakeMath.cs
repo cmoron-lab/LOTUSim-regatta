@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Cyril Moron — EPL-2.0
-// Pure motion arithmetic for the Unity water-decal wake.
+// Pure motion arithmetic shared by the Unity water-wake implementations.
 using UnityEngine;
 
 public static class WakeMath
@@ -8,6 +8,38 @@ public static class WakeMath
     {
         if (refSpeed <= 0f) return 0f;
         return Mathf.Clamp01(speed / refSpeed);
+    }
+
+    public static float WakeStrength(float speed, float refSpeed)
+    {
+        float factor = SpeedFactor(speed, refSpeed);
+        return factor * factor;
+    }
+
+    public static float WakeLength(
+        float speed, float refSpeed, float minLength, float maxLength)
+    {
+        if (minLength < 0f || maxLength < minLength) return 0f;
+        return Mathf.Lerp(
+            minLength, maxLength, SpeedFactor(speed, refSpeed));
+    }
+
+    public static float WakePeriod(
+        float speed, float minPeriod, float maxPeriod)
+    {
+        if (speed <= 0f || minPeriod <= 0f || maxPeriod < minPeriod)
+            return 0f;
+        return Mathf.Clamp(
+            2f * Mathf.PI * speed / 9.81f, minPeriod, maxPeriod);
+    }
+
+    public static float MotionSpeed(
+        float distance, float deltaTime, float maxStep)
+    {
+        if (distance <= 0f || deltaTime <= 0f ||
+            maxStep <= 0f || distance > maxStep)
+            return 0f;
+        return distance / deltaTime;
     }
 
     public static bool ShouldEmit(
