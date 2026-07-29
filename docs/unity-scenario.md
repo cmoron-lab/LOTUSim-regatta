@@ -1,14 +1,15 @@
 # Unity Regatta scenario — build recipe
 
-The Regatta scene and everything it depends on (boat/buoy assets, Addressable
-entry, deployed scripts) are committed on `feature/regatta-scenario` — the
-Unity repo **must be on that branch**: on `main` the scene may still open from
-a stray working-tree copy, but the `focus_v2` Addressable key does not exist
-and the bridge fails at spawn with `InvalidKeyException`. This doc remains the
-recipe to rebuild the scene from scratch if needed.
+The Regatta production scene is on Unity branch `feat/regatta-particles`, based
+on `feature/regatta-scenario`. The latter provides the boat assets, Addressable
+entry, and bridge integration; `main` may still open from a stray working-tree
+copy, but lacks the `focus_v2` Addressable key and fails at spawn with
+`InvalidKeyException`. This doc remains the recipe to rebuild the scene from
+scratch if needed.
 
-- Project: `LOTUSim-Unity-modules` (fork `cmoron-lab`), Unity `2022.3.62f2`, HDRP.
-- Branch: `feature/regatta-scenario`.
+- Project: `LOTUSim-Unity-modules` (fork `cmoron-lab`), Unity `2023.1.20f1`,
+  HDRP `15.0.7`.
+- Branch: `feat/regatta-particles` (based on `feature/regatta-scenario`).
 
 ## Scene contents
 
@@ -21,10 +22,9 @@ wired) and strip it down:
 - **Game Manager** (multi-user login flow, inherited from defenseScenario) —
   delete, not needed for a single-boat headless-driven demo.
 - Defense decor, the Leap Motion rig, the old camera rig — disable, not needed.
-- **Buoys**: two static instances of `regatta_buoy.fbx` placed directly in the
-  scene (not bridged, not an Addressable — see the design doc's C2) at Unity
-  `(0, 0, 0)` and `(0, 0, 15)`. Conversion from gz coordinates: `unity = (gz.x,
-  gz.z, gz.y)` (see `common.cs` in the Unity modules for the canonical formula).
+- **Marks and buoys** come from the simulation stack through the bridge. Do not
+  add static scene copies: they duplicate the bridged objects and drift from
+  the authoritative scenario.
 - **Ocean**: HDRP `WaterSurface` component, `Ripples Wind Speed ≈ 2` — this is
   a rendering-only knob; the physics wind/sea is flat (uniform wind lives in
   `focus_v2.yaml`, not the visual ocean).
@@ -51,23 +51,57 @@ Source of truth is `unity/*.cs` in **this** repo; deployed copies live at
   `sailSign` / `rudderSign` flip a convention live without recompiling.
 - `RegattaCameraRig` — chase / orbit / onboard / free-FPS modes, cycled with
   `C`; RMB-drag to look around, wheel to zoom/adjust speed.
+- `ManualHelm` — `M` (or gamepad Start) toggles manual helm, publishing on
+  `/lotusim/manual_cmd_array`. The helmsman treats a fresh manual message as an
+  override and silence as "the algo sails" — no mode topic, so a dead Unity
+  hands the helm back by itself. Inputs: arrow keys always; any two physical
+  axes via the new Input System — defaults are baked in (helm = T-Rudder toe
+  brakes, one per side; sheet = Warthog stick X, right hauls in), `B` runs a
+  3-phase excursion-based rebind (push right / push left / push toward haul).
+  A phantom axis parked at an extreme can never win a bind — it does not move.
+  Float PlayerPrefs proved unreliable (read back as zeroes), so a persisted
+  bind with `sign`/`span` 0 is treated as corrupt and the baked defaults win.
+  Caveat: the FREE camera also reads the arrows; sail from the other modes.
+- `NativeFoamWakeController` — the active native HDRP wake: four dynamic,
+  periodically driven `WaterFoamGenerator`s per boat (stern arms plus bow and
+  stern injection) and a `BowWave` `WaterDeformer`. The legacy `WakeEmitter`
+  trail is disabled, so the scene renders one wake implementation only.
+
+HDRP permits 64 foam generators. This milestone is qualified for one boat;
+16 boats saturate that global limit and a 17th loses generators. Introduce a
+shared generator pool before qualifying a fleet of that size.
+
+### Unity on Windows
+
+The project files must live on the **Windows** filesystem (here
+`C:\Users\cyril\lotusim-unity`) — the editor is not usable against `\\wsl$`.
+That working tree is the production Unity `2023.1.20f1` / HDRP `15.0.7`
+cutover on `feat/regatta-particles`.
+The ROS IP stays `127.0.0.1`: WSL2 forwards localhost from Windows into Linux,
+so the endpoint on `:10000` is reachable as-is. Deploy scripts from WSL via
+`/mnt/c/Users/cyril/lotusim-unity/Assets/Scripts/Regatta/`.
 
 ## Standalone player (no editor)
 
-`Assets/Editor/BuildRegatta.cs` builds a native arm64 `Builds/Regatta.app`
-(menu `LOTUSim > Build Regatta (macOS)`, or headless — editor must be closed):
+`Assets/Editor/BuildRegatta.cs` selects the host platform. On the production
+Windows worktree it creates `Builds/Regatta/Regatta.exe` (editor must be
+closed):
 
 ```bash
-/Applications/Unity/Hub/Editor/2022.3.62f2/Unity.app/Contents/MacOS/Unity \
-  -batchmode -quit -projectPath LOTUSim-Unity-modules \
-  -executeMethod BuildRegatta.Build -logFile /tmp/unity_build.log
+'/mnt/c/Program Files/Unity/Hub/Editor/2023.1.20f1/Editor/Unity.exe' \
+  -batchmode -quit -projectPath 'C:\Users\cyril\lotusim-unity' \
+  -executeMethod BuildRegatta.Build \
+  -logFile 'C:\Users\cyril\lotusim-unity\Logs\regatta-build.log'
 ```
 
-First build ≈ 11 min (HDRP shader variants), then cached. Run flow is the same
-as the editor: start the stack (`UNITY=1 ./scripts/run_regatta.sh 900 hold`), then open
-`Regatta.app` instead of pressing Play. Trap: editor-only code outside an
-`Editor/` folder compiles in the editor but breaks player builds (CS0246) —
-`LotusimConnectorEditor.cs` carries the `#if UNITY_EDITOR` guard for this.
+On macOS the same method creates a native arm64 `Builds/Regatta.app`; on Linux
+it creates `Builds/Regatta/Regatta.x86_64`, provided the matching Unity build
+module is installed. First build ≈ 11 min (HDRP shader variants), then cached.
+Run flow is the same as the editor: start the stack
+(`UNITY=1 ./scripts/run_regatta.sh 900 hold`), then open the player instead of
+pressing Play. Trap: editor-only code outside an `Editor/` folder compiles in
+the editor but breaks player builds (CS0246) — `LotusimConnectorEditor.cs`
+carries the `#if UNITY_EDITOR` guard for this.
 
 ## Launch order
 

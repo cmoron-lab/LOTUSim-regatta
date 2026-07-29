@@ -1,7 +1,17 @@
 # Unity native water-foam spike — verification
 
 **Date:** 2026-07-29  
-**Decision:** accepted spike; production migration still pending
+**Decision:** production cutover completed
+
+> Historical verification update — the production Windows project now uses
+> Unity `2023.1.20f1` / HDRP `15.0.7`. The final wake evolved from the spike's
+> static arms to four periodically driven dynamic `WaterFoamGenerator`s per
+> boat, with bow and stern injection and a `BowWave` `WaterDeformer`;
+> `WakeEmitter` is disabled. The final evidence is EditMode `41/41`, a
+> successful Windows player build with 9 warnings, and accepted mono-boat
+> visual validation. A separate player containing `Launcher` and
+> `defenseScenario` also builds; multi-boat and `defenseScenario` visual
+> non-regression are not qualified.
 
 ## Result
 
@@ -12,7 +22,8 @@ does not become airborne with the hull, and fades after the vessel stops.
 ![Native HDRP foam wake](../media/unity-native-water-foam-spike.png)
 
 The Unity 2022 source project at
-`C:\Users\cyril\lotusim-unity` was not modified by this spike.
+`C:\Users\cyril\lotusim-unity` was not modified by this spike; the later
+production cutover is recorded above.
 
 ## Versions
 
@@ -42,7 +53,7 @@ The active Regatta camera was also verified to receive:
 Water surface:
 
 - foam atlas: `1024`, area `32 m × 32 m`, offset `(0, 7.5)`;
-- persistence multiplier: `0.15`;
+- persistence multiplier: `0.45`;
 - texture tiling: `2`;
 - smoothness: `0.3`;
 - simulation foam amount: `0.2`.
@@ -50,30 +61,41 @@ Water surface:
 Focus V2 prefab:
 
 - rejected `WakeEmitter` disabled;
-- two rectangular `WaterFoamGenerator` children;
+- two serialized disk generators used as moving wake-crest brushes;
+- one bow and one stern disk generator created at runtime;
+- one runtime `BowWave` water deformer;
 - half-angle: `19.5°`;
-- each arm: `0.09 m × 1.8 m`;
-- stern anchor: local `x = -0.425 m`;
-- arm centres: local `x = -0.8483 m`, `z = ±0.3005 m`;
-- arm rotations: local yaw `∓70.5°`;
-- maximum surface-foam dimmer: `0.6`.
+- wake brush: `0.12 m × 0.18 m`, maximum dimmer `0.75`;
+- stern foam: `0.16 m × 0.34 m`, dimmer `0.22`;
+- bow foam: `0.28 m × 0.5 m`, dimmer `0.25`;
+- bow wave: `1 m × 2 m`, depth `0.12`, elevation `0.1`.
 
-`NativeFoamWakeController` scales both generators from zero at rest to full
-intensity at `0.8 m/s`. A pose step above `0.25 m` is treated as a discontinuity
-and injects no foam. Intensity smoothing is `0.15 s`.
+`NativeFoamWakeController` scales foam quadratically from zero below
+`0.04 m/s` to full intensity at `0.8 m/s`. Successive crests use a dynamic
+period of `0.35–0.8 s` and length of `0.25–1.3 m`. A pose step above `0.25 m`
+is treated as a discontinuity and injects no foam. Intensity smoothing is
+`0.15 s`.
 
 ## Verification evidence
 
-EditMode tests:
+Final EditMode evidence:
 
 ```text
-testcasecount=21 result=Passed passed=21 failed=0
+testcasecount=41 result=Passed passed=41 failed=0
 ```
 
-Windows player build:
+Final Windows player-build evidence:
 
 ```text
-[BuildRegatta] Succeeded — 369 MB, 0 errors, 2 warnings
+[BuildRegatta] Succeeded — 369 MB, 0 errors, 9 warnings
+```
+
+The enabled historical scenes also complete a separate Windows player build:
+
+```text
+Assets/Scenes/Launcher.unity
+Assets/Scenes/Defense/defenseScenario.unity
+Build Finished, Result: Success.
 ```
 
 Live command, with exactly one simulator stack and one Unity player:
@@ -95,9 +117,8 @@ Observed:
 The temporary runtime diagnostic used to inspect HDRP's camera volume stack and
 prefab axes was removed before the final tests and build.
 
-## Next gate
+## Remaining qualification
 
-Keep the source Unity 2022 project unchanged until choosing the production
-cutover. Retaining this implementation means migrating the canonical Windows
-project to Unity `2023.1.20f1`/HDRP `15.0.7` and replaying the same tests before
-replacing its build.
+The production cutover is complete. Do not infer fleet readiness from this
+mono-boat evidence: multi-boat wake rendering and visual non-regression of
+`defenseScenario` remain to be qualified.

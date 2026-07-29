@@ -1,7 +1,17 @@
 # Unity native water-foam spike
 
 **Date:** 2026-07-29
-**Status:** spike accepted; production migration pending
+**Status:** production cutover completed
+
+> Historical design update — the accepted spike was cut over to the canonical
+> Windows project on Unity `2023.1.20f1` / HDRP `15.0.7`. The implementation
+> evolved from two static stern arms to four periodically driven dynamic foam
+> generators per boat (bow and stern injection), plus a `BowWave`
+> `WaterDeformer`; `WakeEmitter` is disabled. Evidence remains the existing
+> EditMode `41/41`, successful Windows build with 9 warnings, and accepted
+> mono-boat visual test. A separate player build also validates compilation of
+> `Launcher` and `defenseScenario`; multi-boat qualification and visual
+> non-regression of `defenseScenario` have not been performed.
 
 ## Why
 
@@ -13,23 +23,23 @@ acceptance test:
 - ordinary decals do not provide HDRP's local foam accumulation and have not
   remained visually convincing on the rough rendered sea.
 
-The Windows project currently uses Unity `2022.3.62f2` and HDRP `14.0.12`.
-HDRP's local `WaterFoamGenerator`, intended among other uses for boat trails,
-starts in HDRP 15 and therefore requires Unity 2023.1.
+At the start of the spike, the Windows project used Unity `2022.3.62f2` and
+HDRP `14.0.12`. HDRP's local `WaterFoamGenerator`, intended among other uses
+for boat trails, starts in HDRP 15 and therefore requires Unity 2023.1.
 
 ## Decision
 
 Run a disposable migration spike with Unity `2023.1.20f1` and HDRP `15.0.7`.
-This is the smallest editor and render-pipeline upgrade that contains the
+This was the smallest editor and render-pipeline upgrade that contained the
 native foam generator.
 
 The spike answers one question: can HDRP's accumulated local foam produce a
 dense, wave-integrated, divergent wake for the Focus V2 at the scenario's
 roughly `0.5 m/s` speed?
 
-It does not authorize migrating the main Unity project. A visually successful
-spike is required before choosing whether to retain Unity 2023.1, migrate
-further, or port the result elsewhere.
+At the time, it did not authorize migrating the main Unity project. The
+visually successful spike subsequently led to the production cutover recorded
+above.
 
 ## Isolation
 
@@ -76,7 +86,7 @@ Addressables, or scene architecture, stop the spike and report the blockers.
 ## Native wake experiment
 
 Disable the rejected `WakeEmitter` renderer in the spike so only one wake
-implementation is visible.
+implementation is visible. It remains disabled in production.
 
 Enable local foam in the HDRP asset and on the existing `WaterSurface`. Add two
 small `WaterFoamGenerator` children at the rudder or stern anchor:
@@ -152,7 +162,7 @@ compile alone is insufficient.
 
 - **Accepted:** preserve the isolated spike, document its exact migration and
   wake settings, then make a separate decision about the production Unity
-  version.
+  version. This outcome was selected and the cutover is complete.
 - **Migration failure:** leave the Unity 2022 project untouched and report the
   first incompatible dependency.
 - **Native foam failure:** do not backport HDRP internals and do not revive the
