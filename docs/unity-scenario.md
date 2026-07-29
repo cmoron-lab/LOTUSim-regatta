@@ -48,7 +48,12 @@ Source of truth is `unity/*.cs` in **this** repo; deployed copies live at
   `mainsail(sheet)` / `rudder(helm)` from the JSON `cmd_string`, and swings the
   boom to leeward based on the geometric bearing of `BowNose` vs `Hull`
   against the wind (no frame-convention assumption baked in). Inspector knobs
-  `sailSign` / `rudderSign` flip a convention live without recompiling.
+  `sailSign` / `rudderSign` flip a convention live without recompiling. It also
+  derives apparent wind from the bridged pose and drives matching blend shapes
+  on the grand-voile and foc: a correctly trimmed sail fills, a tack or
+  under-trimmed sail luffs, and the foc reacts slightly faster. Defaults
+  `windFromDeg = 0` and `windSpeed = 3` must stay aligned with the scenario
+  conditions.
 - `RegattaCameraRig` — chase / orbit / onboard / free-FPS modes, cycled with
   `C`; RMB-drag to look around, wheel to zoom/adjust speed.
 - `ManualHelm` — `M` (or gamepad Start) toggles manual helm, publishing on
@@ -70,6 +75,23 @@ Source of truth is `unity/*.cs` in **this** repo; deployed copies live at
 HDRP permits 64 foam generators. This milestone is qualified for one boat;
 16 boats saturate that global limit and a 17th loses generators. Introduce a
 shared generator pool before qualifying a fleet of that size.
+
+## Regenerating the sail shapes
+
+The authored source is `assets/blend/focus_v2.blend` in this repository. With
+Blender 4.5.11 LTS or newer:
+
+```bash
+blender --background assets/blend/focus_v2.blend \
+  --python assets/blend/author_sail_shapes.py -- \
+  --output-fbx /mnt/c/Users/cyril/lotusim-unity/Assets/models/focus_v2/mesh/focus_v2.fbx
+```
+
+The command is idempotent. It preserves sail materials and their markings,
+creates the exact `FilledPort`, `FilledStarboard`, `RipplePort`, and
+`RippleStarboard` keys on both sails, saves the `.blend`, and deploys the FBX.
+Close Unity before running it, then use the EditMode and player build gates
+below.
 
 ### Unity on Windows
 
