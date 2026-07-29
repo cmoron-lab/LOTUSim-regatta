@@ -144,7 +144,8 @@ public class ActuatorAnimator : MonoBehaviour
             windAngle = Vector3.SignedAngle(windFrom, bowAxis, Vector3.up);
             if (Mathf.Abs(windAngle) > 5f)
             {
-                float stableSide = Mathf.Sign(windAngle);
+                float stableSide = SailVisualMath.StableSide(
+                    windAngle, _lastStableSide);
                 if (_hasStableSide && stableSide != _lastStableSide)
                     _tackLuffAge = 0f;
                 _lastStableSide = stableSide;

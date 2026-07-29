@@ -15,6 +15,14 @@ public static class SailVisualMath
         return Mathf.Clamp(0.6f * (Mathf.Abs(windAngle) - 42f), 4f, 80f);
     }
 
+    public static float StableSide(float windAngle, float lastSide)
+    {
+        float magnitude = Mathf.Abs(windAngle);
+        return magnitude <= 5f || magnitude >= 175f
+            ? lastSide
+            : Mathf.Sign(windAngle);
+    }
+
     // x = filled camber, y = loose luff, both 0..1.
     public static Vector2 Response(
         float apparentSpeed, float windAngle, float sheetDeg)

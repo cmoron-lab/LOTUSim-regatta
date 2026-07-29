@@ -173,6 +173,19 @@ public class SailVisualMathTests
                 new Vector3(0.5f, 0f, 0f)));
     }
 
+    [TestCase(3f, -1f, -1f)]
+    [TestCase(-3f, 1f, 1f)]
+    [TestCase(179f, -1f, -1f)]
+    [TestCase(-179f, 1f, 1f)]
+    [TestCase(60f, -1f, 1f)]
+    [TestCase(-60f, 1f, -1f)]
+    public void SailSideChangesOnlyAtStableAngles(
+        float windAngle, float lastSide, float expected)
+    {
+        Assert.AreEqual(
+            expected, SailVisualMath.StableSide(windAngle, lastSide));
+    }
+
     [Test]
     public void CorrectlyTrimmedSailFills()
     {
