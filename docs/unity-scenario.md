@@ -81,6 +81,22 @@ The ROS IP stays `127.0.0.1`: WSL2 forwards localhost from Windows into Linux,
 so the endpoint on `:10000` is reachable as-is. Deploy scripts from WSL via
 `/mnt/c/Users/cyril/lotusim-unity/Assets/Scripts/Regatta/`.
 
+## EditMode verification
+
+With the editor closed:
+
+```bash
+'/mnt/c/Program Files/Unity/Hub/Editor/2023.1.20f1/Editor/Unity.exe' \
+  -batchmode -projectPath 'C:\Users\cyril\lotusim-unity' \
+  -runTests -testPlatform EditMode \
+  -testResults 'C:\Users\cyril\lotusim-unity\Logs\editmode.xml' \
+  -logFile 'C:\Users\cyril\lotusim-unity\Logs\editmode.log'
+```
+
+Do not add `-quit`: the Test Runner exits Unity itself, while `-quit` can stop
+before the tests and still return 0. Verify the generated XML has
+`result="Passed"`; the process exit code alone is insufficient.
+
 ## Standalone player (no editor)
 
 `Assets/Editor/BuildRegatta.cs` selects the host platform. On the production
