@@ -15,6 +15,7 @@ SAILS = {
     "Jib": {"ripple": 0.015},
 }
 SHAPES = ("FilledPort", "FilledStarboard", "RipplePort", "RippleStarboard")
+RUDDER_PIVOT = Vector((0.0, -0.425, 0.0))
 CHORD_ROWS = {}
 
 
@@ -270,7 +271,20 @@ def main():
     arguments = parser.parse_args(sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else [])
 
     if arguments.verify_fbx:
+        for obj in list(bpy.data.objects):
+            bpy.data.objects.remove(obj, do_unlink=True)
         bpy.ops.import_scene.fbx(filepath=arguments.verify_fbx)
+        runtime_objects = sorted(
+            obj.name for obj in bpy.context.scene.objects if obj.type in {"CAMERA", "LIGHT"}
+        )
+        if runtime_objects:
+            raise AssertionError(f"FBX contains runtime cameras/lights: {runtime_objects}")
+        rudder = bpy.data.objects["Rudder"]
+        if not all(
+            math.isclose(value, expected, abs_tol=1e-6)
+            for value, expected in zip(rudder.location, RUDDER_PIVOT)
+        ):
+            raise AssertionError(f"Rudder pivot moved: {tuple(rudder.location)}")
         for sail_name in SAILS:
             verify_authored_sail(bpy.data.objects[sail_name])
         return
@@ -293,6 +307,7 @@ def main():
         bake_space_transform=True,
         path_mode="COPY",
         add_leaf_bones=False,
+        object_types={"ARMATURE", "EMPTY", "MESH"},
     )
 
 
