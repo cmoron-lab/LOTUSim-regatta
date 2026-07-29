@@ -29,6 +29,8 @@ production cutover is recorded above.
 
 - Unity `2023.1.20f1` (`35a524b12060`)
 - HDRP, Core, URP, and Shader Graph `15.0.7`
+- production branch: `feature/regatta-scenario`
+- production worktree: `C:\Users\cyril\lotusim-unity`
 - isolated project:
   `C:\Users\cyril\lotusim-unity-2023.1-spike`
 - player:

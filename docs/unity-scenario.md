@@ -1,15 +1,15 @@
 # Unity Regatta scenario — build recipe
 
-The Regatta production scene is on Unity branch `feat/regatta-particles`, based
-on `feature/regatta-scenario`. The latter provides the boat assets, Addressable
-entry, and bridge integration; `main` may still open from a stray working-tree
-copy, but lacks the `focus_v2` Addressable key and fails at spawn with
+The Regatta production scene is on Unity branch
+`feature/regatta-scenario`. It provides the boat assets, Addressable entry, and
+bridge integration; `main` may still open from a stray working-tree copy, but
+lacks the `focus_v2` Addressable key and fails at spawn with
 `InvalidKeyException`. This doc remains the recipe to rebuild the scene from
 scratch if needed.
 
 - Project: `LOTUSim-Unity-modules` (fork `cmoron-lab`), Unity `2023.1.20f1`,
   HDRP `15.0.7`.
-- Branch: `feat/regatta-particles` (based on `feature/regatta-scenario`).
+- Branch: `feature/regatta-scenario`.
 
 ## Scene contents
 
@@ -76,7 +76,7 @@ shared generator pool before qualifying a fleet of that size.
 The project files must live on the **Windows** filesystem (here
 `C:\Users\cyril\lotusim-unity`) — the editor is not usable against `\\wsl$`.
 That working tree is the production Unity `2023.1.20f1` / HDRP `15.0.7`
-cutover on `feat/regatta-particles`.
+checkout on `feature/regatta-scenario`.
 The ROS IP stays `127.0.0.1`: WSL2 forwards localhost from Windows into Linux,
 so the endpoint on `:10000` is reachable as-is. Deploy scripts from WSL via
 `/mnt/c/Users/cyril/lotusim-unity/Assets/Scripts/Regatta/`.
