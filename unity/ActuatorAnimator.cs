@@ -196,6 +196,7 @@ public class ActuatorAnimator : MonoBehaviour
     {
         renderer = sail ? sail.GetComponentInChildren<SkinnedMeshRenderer>() : null;
         shapes = null;
+        if (!sail) return;
         if (!renderer || renderer.sharedMesh == null)
         {
             Debug.LogWarning($"ActuatorAnimator: '{sailName}' blend shapes unavailable");
