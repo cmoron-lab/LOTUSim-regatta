@@ -113,8 +113,9 @@ stack at each layer boundary — all three merged upstream 2026-07-13.
 Anywhere docker runs, the same stack runs in an Ubuntu 24.04 container —
 `run_regatta.sh` wraps itself whenever this machine is not what `install.sh`
 targets. Another x86-64 Linux runs it natively; Apple Silicon and arm64 run it
-emulated (Rosetta/qemu), because `xdyn-for-cs` ships as an x86-64 binary. Currently
-unverified since the harness was split — status and image recipe in
+emulated (Rosetta/qemu), because `xdyn-for-cs` ships as an x86-64 binary. Verified
+on Apple Silicon: the same `SMOKE PASS`, rounding the same two marks within
+centimetres of the native run. Image recipe and the two traps that path has in
 [`docs/reference.md`](docs/reference.md).
 
 License: EPL-2.0.

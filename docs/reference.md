@@ -243,9 +243,28 @@ Ubuntu 24.04 **and** x86-64 — rather than on `uname -s`, because a Fedora host
 arm64 Ubuntu cannot run the native path either. Force either side with
 `RUNNER=native|docker`.
 
-**Status: unverified since the harness was split.** The container gets by
-environment (`LOTUSIM_WS`, `LOTUSIM_PATH`, `PYTHONPATH`) what a native machine gets
-from `install.sh`, and that branch has not been run on a Mac since it was written.
+**Status: verified on macOS 26.5 / Apple Silicon, 2026-07-30** — `SMOKE PASS`,
+exit 0, 242.4 simulated seconds for the lap, marks left to port by 1.71 m and
+1.79 m (the native numbers are 1.70 and 1.79). Getting there needed two fixes, and
+both are worth knowing before touching this path again:
+
+- **`env.sh` is sourced by `run_regatta.sh`, not by `regatta_stack.sh`.** The image
+  bakes `LOTUSIM_WS`, `LOTUSIM_PATH` and `launch/` on `PATH` as image `ENV`, so the
+  stack's "is the environment already up?" guard is satisfied on entry and never
+  fires — while `install/setup.bash` has not been sourced. The run starts and dies
+  20 s later on `No module named 'lotusim_msgs'` in the helmsman.
+- **The image's `lotusim` launcher must carry the composable `--assets-path`.** With
+  the pre-#47 launcher the option *replaces* the assets root instead of appending to
+  it, so `GZ_SIM_RESOURCE_PATH` loses the core's `assets/models`, `focus_v2` becomes
+  unresolvable, and gz advertises `/world/lotusim/dynamic_pose/info` and then hangs
+  at init without ever publishing. The symptom reads exactly like the Rosetta DDS
+  deadlock — `NO POSE RECEIVED`, xdyn never sees a client — which is the trap: it is
+  a stale image, not a transport problem. `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`, which
+  the pre-split harness exported, turned out **not** to be needed once the launcher
+  was current.
+
+The container is otherwise the same code as the native path: the gz stack, the
+physics and the pilot all come from the mounted repo and the image's prebuilt core.
 
 Everything runs inside `lotusim:focus-v2`, built from `LOTUSim@regatta-base`
 (upstream `new_main` with the physics fixes merged, plus the focus_v2 model, the
@@ -261,15 +280,28 @@ docker exec <container> rm -rf /lotusim_ws/src/LOTUSim
 git -C LOTUSim archive regatta-base | docker cp - <container>:/lotusim_ws/src/LOTUSim
 # 2. build IN THE SAME container the image is committed from
 #    (radar_sensor needs: apt-get install -y ros-jazzy-radar-msgs)
-docker exec <container> bash -lc \
-  'source /opt/ros/jazzy/setup.bash && cd /lotusim_ws && \
-   colcon build --merge-install'
+#    SEQUENTIALLY, and only what changed: Docker Desktop's VM has ~7.6 GB, and a
+#    parallel colcon under emulation gets its compiler OOM-killed -- which surfaces
+#    as `Killed` on one .cpp and six "Aborted" packages, not as an out-of-memory
+#    message. Sources whose bytes did not change need no rebuild at all.
+docker exec -e MAKEFLAGS=-j1 <container> bash -lc \
+  'source /opt/ros/jazzy/setup.bash && source /lotusim_ws/install/setup.bash && \
+   cd /lotusim_ws && colcon build --merge-install --executor sequential \
+   --parallel-workers 1 --packages-select <the packages that changed>'
+# `diff -rq /lotusim_ws/src/LOTUSim <host>/LOTUSim` inside the old image names them.
 # 3. freeze the layer -- docker commit KEEPS the container entrypoint: create the
-#    container without --entrypoint, or restore ENTRYPOINT ["/ros_entrypoint.sh"]
-docker commit <container> lotusim:focus-v2
+#    container without --entrypoint, or restore ENTRYPOINT ["/ros_entrypoint.sh"].
+#    It also keeps the container's CMD, so a container created as `... sleep
+#    infinity` bakes that in and `docker run -it lotusim:focus-v2` no longer opens a
+#    shell: restore it. Commit to a throwaway tag, prove it with the smoke gate
+#    (`IMAGE=lotusim:focus-v2-rc ./scripts/run_regatta.sh 400 smoke`), and only then
+#    retag -- the image cannot be rebuilt from a Dockerfile if it turns out broken.
+docker commit --change 'CMD ["bash"]' <container> lotusim:focus-v2-rc
 ```
 
-Backup tag before the quaternion fix: `focus-v2-pre-quatfix`.
+Backup tags: `focus-v2-pre-quatfix` (before the quaternion fix) and
+`focus-v2-pre-launcher-composable` (before the 2026-07-30 rebake, when the launcher
+still predated the composable `--assets-path`).
 
 ### Performance
 
