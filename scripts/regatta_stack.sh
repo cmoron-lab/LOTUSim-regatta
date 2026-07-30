@@ -28,6 +28,15 @@ fi
   echo "[!] LOTUSIM_PATH=$LOTUSIM_PATH holds no physics/xdyn-for-cs -- run install.sh"; exit 1; }
 command -v lotusim > /dev/null || {
   echo "[!] lotusim is not on PATH -- run install.sh, or . $REGATTA_ROOT/env.sh"; exit 1; }
+# The core's ROS overlay is the half that no path check can see: `lotusim` on PATH
+# and an xdyn binary on disk are both satisfied by an environment where
+# install/setup.bash was never sourced. The helmsman is then the first thing to
+# notice, 20 s in, and the run reports itself as "no pose received" -- a physics
+# symptom for a setup fault. Ask the interpreter that will actually import it.
+python3 -c "import lotusim_msgs" 2> /dev/null || {
+  echo "[!] lotusim_msgs is not importable: the core's ROS overlay is not sourced."
+  echo "[!] . $REGATTA_ROOT/env.sh -- and check LOTUSIM_WS=$LOTUSIM_WS is the right one."
+  exit 1; }
 
 # A gz left over from an earlier run keeps publishing on the same topics: the pose
 # stream then carries two boats and the smoke gate believes whichever it sees first.
