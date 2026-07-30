@@ -72,15 +72,23 @@ UNITY_PORT=; [ -n "${UNITY:-}" ] && UNITY_PORT="-p 10000:10000"
 # In-container bash is PID1 and ignores SIGINT, so the EXIT trap never fires
 # without this host-side backstop.
 trap 'docker rm -f regatta >/dev/null 2>&1' INT TERM
-# The image ships the core prebuilt at /lotusim_ws but exports none of it, and it
-# has no overlay: the repo is mounted, never colcon-built. So the container gets
-# by environment what a native machine gets from install.sh. UNVERIFIED on macOS
-# since this branch was written -- Task 9 of the plan is the run that settles it.
+# The image ships the core prebuilt at /lotusim_ws but sources none of it, so the
+# container needs the environment install.sh would have left behind -- and env.sh
+# is what builds it. It is sourced HERE rather than left to regatta_stack.sh's own
+# "is the environment up?" guard, because in this image that guard is already
+# satisfied and never fires: `LOTUSIM_WS`, `LOTUSIM_PATH` and `launch/` on PATH are
+# baked in as image ENV, while `install/setup.bash` was never sourced. The run then
+# starts, and dies 20 s in on `No module named 'lotusim_msgs'` in the helmsman.
+#
+# PYTHONPATH is the one thing env.sh cannot supply here: it puts src/ on the path
+# (that is `regatta`), while `regatta_agents` comes from the colcon overlay a native
+# machine has and this container does not. What is passed in is prepended to, never
+# replaced by, env.sh.
 REPO_IN_LAB="/lab/$(basename "$REGATTA_ROOT")"
 exec docker run --rm --platform linux/amd64 --name regatta -v "$LAB":/lab \
   $UNITY_PORT \
   -e DUR="$DUR" -e MODE="$MODE" -e UNITY="${UNITY:-}" -e WS_TAP="${WS_TAP:-}" \
-  -e LOTUSIM_WS=/lotusim_ws -e LOTUSIM_PATH=/lotusim_ws/src/LOTUSim \
+  -e LOTUSIM_WS=/lotusim_ws \
   -e PYTHONPATH="$REPO_IN_LAB/src/regatta_agents" \
   "$IMAGE" bash -lc \
-  "export PATH=\"\$LOTUSIM_PATH/launch:\$PATH\"; $REPO_IN_LAB/scripts/regatta_stack.sh \"\$DUR\" \"\$MODE\""
+  ". $REPO_IN_LAB/env.sh && $REPO_IN_LAB/scripts/regatta_stack.sh \"\$DUR\" \"\$MODE\""
