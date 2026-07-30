@@ -50,7 +50,7 @@ if timeout 10 gz topic -l 2>/dev/null | grep -q "^/world/lotusim/"; then
   exit 1
 fi
 
-XPID= GPID= HPID= WPID= EPID=
+XPID= GPID= HPID= WPID= EPID= CPID=
 # `lotusim run` spawns gz as a CHILD, so killing $GPID alone orphans it (the old
 # harness ran gz directly, where that was the same process). Kill the tree,
 # deepest first, and with -9: gz ignores SIGTERM.
@@ -59,7 +59,7 @@ kill_tree(){
   for p in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$p"; done
   kill -9 "$1" 2>/dev/null
 }
-cleanup(){ local p; for p in $XPID $GPID $HPID $WPID $EPID; do kill_tree "$p"; done; }
+cleanup(){ local p; for p in $XPID $GPID $HPID $WPID $EPID $CPID; do kill_tree "$p"; done; }
 trap cleanup EXIT
 
 if [ -n "${UNITY:-}" ]; then
@@ -101,10 +101,26 @@ else
   ASSETS_ARG="$REGATTA_ROOT/assets"
 fi
 
+# The pilot must tick on SIMULATED time, or its authority per unit of physics
+# becomes a property of the machine: the timer fires on wall time, so at RTF 0.13
+# it issues 230 commands per simulated second where RTF 0.93 issues 32. Attaching a
+# renderer then changes the trajectory, not merely how fast one watches it -- which
+# is the opposite of what a simulator is for.
+#
+# gz already publishes its clock; nothing in this ecosystem bridges it to ROS, so
+# `use_sim_time` has nothing to listen to. Bridge it here. The bridge is started
+# before the helmsman and simply waits for gz, which starts later.
+ros2 run ros_gz_bridge parameter_bridge \
+  "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock" > /tmp/clock_bridge.log 2>&1 & CPID=$!
+sleep 2
+
 # Helmsman BEFORE gz: it publishes vessel_cmd_array continuously, so xdyn has
 # sheet and helm at the first physics step. Without it xdyn answers "Unable to
-# find signal" and the plugin crashes parsing the reply.
-python3 -u -m regatta_agents.helmsman > /tmp/helm.log 2>&1 & HPID=$!
+# find signal" and the plugin crashes parsing the reply. With use_sim_time the
+# control timer cannot fire until gz publishes a clock -- the constructor's neutral
+# seed is what covers that window, so do not remove it.
+python3 -u -m regatta_agents.helmsman --ros-args -p use_sim_time:=true \
+  > /tmp/helm.log 2>&1 & HPID=$!
 sleep 3
 
 lotusim --assets-path "$ASSETS_ARG" run "$WORLD_ARG" > /tmp/gz.log 2>&1 & GPID=$!

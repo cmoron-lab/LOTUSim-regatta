@@ -79,14 +79,27 @@ Three clocks run, and **no two of them lock**:
 |---|---|---|
 | simulated time | gz, stamped on every pose | the only one a verdict may depend on |
 | wall time | the machine | RTF ≈ 1.0 native, ≈ 1.01 under Rosetta |
-| the helmsman's timer | a 30 Hz ROS wall-clock timer | **not** driven by the pose stream |
+| the helmsman's timer | 30 Hz on the **simulated** clock (`use_sim_time`) | since 2026-07-30 |
 
-The last one is why **a trajectory is not bit-reproducible between two runs of the
-same commit**: the control ticks on wall time while the physics advances on the sim
-clock, and the phase between them drifts. Two runs of the same code gave rounding
-margins 11 cm apart. Any gate written against a tight threshold is one bad run from
-a false failure — which is why the smoke gate now asks "was the mark passed and
-left to port", a question that does not care about centimetres.
+That third clock used to be a wall-clock timer, and it made the boat's behaviour a
+property of the machine. Control authority per unit of physics is `rate_hz / RTF`:
+32 commands per simulated second at RTF 0.93, but **230 at RTF 0.13** — the figure
+measured with a renderer attached at native resolution. Attaching Unity or the web
+UI therefore did not merely slow the view down, it changed the trajectory, and a
+gate could pass headless and fail rendered.
+
+The fix is standard ROS and needed nothing from upstream: **gz already publishes a
+clock**, on its own bus, as `/clock`. Nothing in this ecosystem bridged it, so
+`use_sim_time` had nothing to listen to — `ros_gz_bridge` is installed and
+`regatta_stack.sh` now runs it. Consequence for anyone plugging in their own
+controller: **set `use_sim_time` on your node**, or your algorithm's authority will
+scale with the frame rate of whoever happens to be watching.
+
+Two caveats. A trajectory is still not bit-reproducible — thread scheduling and
+message ordering remain — but the *systematic* drift with machine speed is gone.
+And with `use_sim_time` a timer cannot fire before gz publishes a clock, which is
+why the helmsman seeds a neutral command in its constructor: that seed is what
+gives xdyn a command at the first physics step. Do not remove it.
 
 Two **independent** step sizes:
 
