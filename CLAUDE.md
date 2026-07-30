@@ -25,6 +25,31 @@ that talked to the previous run's physics server.
 The last row matters as much as the others: an orphan left publishing will make the
 *next* run lie.
 
+**Off the reference platform, three of those five rows change.** On a Mac (or any
+host that is not Ubuntu 24.04 x86-64) `env.sh` cannot even be sourced — there is no
+`/opt/ros` — so anything sourcing it is Ubuntu-only. What still holds:
+
+| row | off-platform |
+|---|---|
+| unit tests | unchanged: the core is stdlib-only, it runs natively |
+| the full stack | unchanged: `run_regatta.sh` routes itself into the container |
+| nothing survived | by construction — the container is `--rm`, check `docker ps` |
+| overlay builds | Ubuntu only: the container carries a prebuilt core and no overlay |
+| physics oracle | needs the container too, and it is **not** a ten-minute run there |
+
+The oracle off-platform, with no native route of its own:
+
+```bash
+docker run --rm --platform linux/amd64 -v ~/src/lotusim-lab:/lab \
+  -e LOTUSIM_WS=/lotusim_ws lotusim:focus-v2 \
+  bash -lc '. /lab/LOTUSim-regatta/env.sh && python3 -u -m regatta.oracle'
+```
+
+Measured on Apple Silicon 2026-07-30: still running after **75 minutes** and stopped
+there, against the ~10 minutes it costs natively. It steps physics correctly the
+whole time — the cost is the emulated Python driving 50 000 round trips, five xdyn
+substeps each. Budget an hour or more, or run the oracle on the Ubuntu side.
+
 ## Invariants
 
 Each of these looks like something to improve. Each has a reason, stated so that it
