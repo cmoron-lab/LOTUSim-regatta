@@ -1,11 +1,19 @@
 # Roadmap
 
-**State as of 2026-07-26.** The full lap runs natively on Ubuntu 24.04 / WSL2 at
+**State as of 2026-07-30.** The full lap runs natively on Ubuntu 24.04 / WSL2 at
 RTF ≈ 1.0: the reference pilot beats up to the windward mark, rounds it leaving it
 to port, runs back down, rounds the leeward mark and starts another lap. Verified
 headless (`SMOKE PASS`), in the LOTUSim web UI, and rendered in the Unity editor on
 Linux — the last two **simultaneously from one stack**, since both are consumers of
 the same ROS topics rather than competing publishers.
+
+**Also verified on macOS / Apple Silicon (2026-07-30)**, through the container path:
+same `SMOKE PASS`, marks left to port within a centimetre of the native run. Two
+things were settled there and both are recorded in `measurements/2026-07-30-macOS.md`:
+the simulation is already at real time and has no headroom left to win, while a
+renderer attached at native Retina resolution takes 87 % of the clock. And the pilot
+now ticks on the **simulated** clock, so a lap no longer depends on who is watching
+it — the trajectory held to 1 cm across a 5.5× change in RTF.
 
 The repository is a `uv` project whose core needs neither ROS nor gz, so a pilot can
 be written and iterated without installing either.
@@ -41,7 +49,32 @@ comparison the project exists for.
    no-unknowns fallback: ≈ 2.4 ms per rk4 substep on 8-16 cores holds a small fleet.
 2. **N pilots in the helmsman.** `Pilot` is already per-vessel and stateful, so this
    is N instances rather than a redesign.
-3. Deserves its own design doc before any code.
+3. **Give the state stream a transport fit for racing.** Established 2026-07-30 by
+   reading the code, not by inference:
+   - the core publishes vessel state `RELIABLE`, `TRANSIENT_LOCAL`, depth 10
+     (`render_interface/src/ros_interface.cpp:36`). A reliable queue is the wrong
+     shape for a state broadcast: one slow competitor makes the middleware
+     retransmit and can hold the producer back, and the client renders stale states
+     in order instead of the freshest one. A state feed wants `BEST_EFFORT`,
+     `KEEP_LAST(1)`, `VOLATILE` — latest wins, never retransmit.
+   - **a native ROS client can already choose that for itself** (DDS lets a
+     `BEST_EFFORT` reader subscribe to a `RELIABLE` writer). **A Unity client cannot**:
+     the real subscriber is `ros_tcp_endpoint`, which hardcodes
+     `RELIABLE`+`TRANSIENT_LOCAL` (`subscriber.py:45`) and exposes only `ROS_IP` and
+     `ROS_TCP_PORT`. That bridge belongs to Unity Robotics, not to LOTUSim.
+   - **the state carries no velocity.** xdyn knows `u,v,w`; nothing publishes it, so
+     Unity components each re-derived speed from frame-to-frame position deltas —
+     the defect fixed on 2026-07-30. A client that must extrapolate between packets,
+     which is what network play is, needs velocity in the state.
+   - note ROS 2 is **already UDP** (FastDDS); the TCP is only the Unity leg, and
+     only because Unity has no DDS stack. The gz↔xdyn websocket is correctly TCP —
+     it is synchronous request/response where a lost message breaks the step.
+4. **Guarantee the compute budget.** gz never drops a physics step; when it cannot
+   keep up it slows the clock. A simulator should; a race cannot run in slow motion.
+   So the server must hold RTF ≥ 1 **with N vessels** — one blocking websocket round
+   trip per vessel per step — and it must not share a machine with a renderer
+   (`measurements/2026-07-30-macOS.md`). This is sizing, not code.
+5. Deserves its own design doc before any code.
 
 ## 2. Rendering: Unity and the web UI
 
@@ -103,16 +136,9 @@ plain `127.0.0.1` (WSL2 forwards localhost).
 
 - **Select the pilot class by ROS parameter.** Today a user edits `helmsman.py` to
   run their own. This is the natural next step for the audience the guide addresses.
-- **Drive the helmsman off the pose stream** instead of a 30 Hz wall-clock timer.
-  The two clocks do not lock, so the trajectory is not reproducible between two runs
-  of the same commit — margins moved 11 cm between runs. This is the root cause, and
-  fixing it beats widening any threshold.
 - **A real start/finish line**: a bounded segment between two marks. Today it is the
   leeward mark's infinite perpendicular, which is why tacks recross it during the
   beat.
-- **macOS non-regression.** The Docker wrapper feeds the container by environment
-  what a native machine gets from `install.sh`, and has not been run on a Mac since
-  the harness was split. Needs the Mac.
 
 ## Standing notes
 

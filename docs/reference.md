@@ -323,6 +323,12 @@ still predated the composable `--assets-path`).
 | baseline | 0.005 | 0.001 | ≈ 0.26 | ≈ 0.39 |
 | current | 0.01 | 0.005 | ≈ 1.01 | ≈ 1.0 |
 
+Those two rows are the **headless** figures, and they still hold. What they do not
+show is the renderer: attaching one costs far more than any row above, up to 87 % of
+the clock at native Retina resolution, and it dominates every simulation-side knob
+by an order of magnitude. Numbers, method and the two knobs that turned out not to
+work: `measurements/2026-07-30-macOS.md`.
+
 Native is **not** the 3-4× the port assumed: one rk4 substep costs ≈ 2.4 ms on a
 Ryzen 7 5800X against ≈ 3.1 ms under Rosetta, a 1.3× gain. This is why the smoke
 gate's budget is in simulated seconds — RTF is a property of the machine, and it
