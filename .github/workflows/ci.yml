@@ -61,4 +61,40 @@ jobs:
           blender --background --python-exit-code 1 \
             --python assets/blend/author_sail_shapes.py -- \
             --verify-fbx "$RUNNER_TEMP/focus_v2.fbx"
+
+          guard_dir="$RUNNER_TEMP/source-guard"
+          mkdir -p "$guard_dir"
+          cp assets/blend/focus_v2.blend \
+            assets/blend/focus_v2_wood_mahogany.png "$guard_dir/"
+          guard_hash=$(sha256sum "$guard_dir/focus_v2.blend" | cut -d' ' -f1)
+          if blender --background "$guard_dir/focus_v2.blend" \
+            --python-exit-code 1 --python assets/blend/author_sail_shapes.py -- \
+            --output-fbx "$guard_dir/focus_v2.blend"; then
+            echo "source-overwriting export unexpectedly succeeded" >&2
+            exit 1
+          fi
+          echo "$guard_hash  $guard_dir/focus_v2.blend" | sha256sum --check
+
+          failed_dir="$RUNNER_TEMP/failed-export"
+          mkdir -p "$failed_dir"
+          cp assets/blend/focus_v2.blend \
+            assets/blend/focus_v2_wood_mahogany.png "$failed_dir/"
+          failed_hash=$(sha256sum "$failed_dir/focus_v2.blend" | cut -d' ' -f1)
+          if blender --background "$failed_dir/focus_v2.blend" \
+            --python-exit-code 1 --python assets/blend/author_sail_shapes.py -- \
+            --output-fbx /dev/null/focus_v2.fbx --save-source; then
+            echo "invalid export unexpectedly succeeded" >&2
+            exit 1
+          fi
+          echo "$failed_hash  $failed_dir/focus_v2.blend" | sha256sum --check
+
+          save_dir="$RUNNER_TEMP/explicit-save"
+          mkdir -p "$save_dir"
+          cp assets/blend/focus_v2.blend \
+            assets/blend/focus_v2_wood_mahogany.png "$save_dir/"
+          blender --background "$save_dir/focus_v2.blend" \
+            --python-exit-code 1 --python assets/blend/author_sail_shapes.py -- \
+            --output-fbx "$save_dir/focus_v2.fbx" --save-source
+          test -f "$save_dir/focus_v2.blend1"
+
           git diff --exit-code -- assets/blend/focus_v2.blend

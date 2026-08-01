@@ -19,7 +19,9 @@ blender --background assets/blend/focus_v2.blend --python-exit-code 1 \
 Generation authors the sail shapes in memory and does **not** overwrite
 `focus_v2.blend`. To persist the generated shape keys deliberately, add
 `--save-source`; the save happens only after a successful FBX export and keeps
-Blender's normal backup behaviour.
+Blender's normal backup behaviour. Inventory and FBX output paths are rejected
+if they resolve to the opened `.blend`, and missing external textures stop the
+export instead of producing an incomplete asset.
 
 Verify the exported FBX from a fresh empty Blender scene:
 

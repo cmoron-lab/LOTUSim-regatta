@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import sys
+from pathlib import Path
 
 import bpy
 from mathutils import Vector
@@ -284,6 +285,14 @@ def main():
     if arguments.save_source and not bpy.data.filepath:
         parser.error("--save-source requires an opened .blend file")
 
+    source_path = Path(bpy.data.filepath).resolve() if bpy.data.filepath else None
+    for option, output_path in (
+        ("--inventory", arguments.inventory),
+        ("--output-fbx", arguments.output_fbx),
+    ):
+        if source_path and output_path and Path(output_path).expanduser().resolve() == source_path:
+            parser.error(f"{option} must not overwrite the opened .blend file")
+
     if arguments.verify_fbx:
         for obj in list(bpy.data.objects):
             bpy.data.objects.remove(obj, do_unlink=True)
@@ -309,6 +318,17 @@ def main():
     if not arguments.output_fbx:
         parser.error("--output-fbx is required unless --inventory is used")
 
+    missing_images = sorted(
+        image.filepath
+        for image in bpy.data.images
+        if image.source == "FILE"
+        and not image.packed_file
+        and image.filepath
+        and not Path(bpy.path.abspath(image.filepath)).is_file()
+    )
+    if missing_images:
+        raise AssertionError(f"Missing image files: {missing_images}")
+
     for sail_name, settings in SAILS.items():
         author_sail(sail_name, settings["ripple"])
 
@@ -324,7 +344,9 @@ def main():
     if "FINISHED" not in export_result:
         raise AssertionError(f"FBX export failed: {sorted(export_result)}")
     if arguments.save_source:
-        bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)
+        save_result = bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)
+        if "FINISHED" not in save_result:
+            raise AssertionError(f"Source save failed: {sorted(save_result)}")
 
 
 if __name__ == "__main__":

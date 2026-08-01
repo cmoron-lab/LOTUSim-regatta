@@ -36,6 +36,9 @@ Normal generation authors the sail shape keys in memory and exports an FBX, but
 does not overwrite the input `.blend`. Passing `--save-source` explicitly saves
 the authored source only after the FBX export succeeds. The script keeps
 Blender's normal backup behaviour instead of setting `save_version = 0`.
+Inventory and FBX output paths cannot resolve to the opened `.blend`, every
+external image must exist, and Blender's export and save statuses must both
+report success.
 
 Every sampled chord row must contain vertices. A sparse or remeshed sail raises
 an `AssertionError` naming the sail and normalised height instead of leaking a
@@ -73,7 +76,9 @@ One Ubuntu 24.04 workflow runs without ROS, Gazebo, or Unity:
 6. fresh empty-scene import through `--verify-fbx`;
 7. `--python-exit-code 1` so Blender propagates script failures;
 8. `git diff --exit-code -- assets/blend/focus_v2.blend` to prove the default
-   generation path did not overwrite its source.
+   generation path did not overwrite its source;
+9. guarded-path, failed-export, and explicit-save checks against temporary
+   source copies.
 
 The workflow is a verification gate only. It does not publish artifacts or
 require GitHub secrets.
@@ -83,6 +88,9 @@ require GitHub secrets.
 - the replacement branch contains no `unity/` path;
 - generation and fresh FBX verification pass with Blender 4.5.11;
 - generation without `--save-source` leaves the committed `.blend` byte-for-byte
+  unchanged;
+- the wood texture resolves from a repository-relative path;
+- output paths cannot overwrite the source and failed exports leave it
   unchanged;
 - `--save-source` is documented as the only source-writing path;
 - Python tests and the focused Ruff gate pass locally and in GitHub Actions;

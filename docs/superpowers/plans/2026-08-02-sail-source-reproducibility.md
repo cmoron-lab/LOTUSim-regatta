@@ -14,6 +14,8 @@
 - Do not create any path under `unity/` or modify `docs/unity-scenario.md`.
 - Do not modify `LOTUSim-Unity6-modules`; travelling ripple remains separate.
 - Normal generation must not write `assets/blend/focus_v2.blend`.
+- Inventory and FBX output paths must not resolve to the opened `.blend`.
+- Every external texture must resolve before export.
 - `--save-source` may save only after a successful FBX export.
 - Keep Blender's backup behaviour; do not set `save_version = 0`.
 - CI uses the official Blender 4.5.11 Linux archive with SHA-256 `05ed7bd41bf3e61ae4f4a7cdc364c43088bf8b3fed702c2269c018fdf63a2188`.
@@ -112,7 +114,9 @@ export_result = bpy.ops.export_scene.fbx(
 if "FINISHED" not in export_result:
     raise AssertionError(f"FBX export failed: {sorted(export_result)}")
 if arguments.save_source:
-    bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)
+    save_result = bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)
+    if "FINISHED" not in save_result:
+        raise AssertionError(f"Source save failed: {sorted(save_result)}")
 ```
 
 Delete both `bpy.context.preferences.filepaths.save_version = 0` and the save
