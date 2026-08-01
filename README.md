@@ -89,7 +89,7 @@ src/regatta_agents/           the ROS2 edge: helmsman.py, the node around the br
 scripts/                      run_regatta.sh (entry point, see -h) + the gz gate
 tests/                        pytest for the pure core
 assets/                       world, buoy model, scenario wind, Blender sources
-unity/                        C# scripts deployed into LOTUSim-Unity-modules
+../LOTUSim-Unity6-modules/    Unity 6 renderer: scene, scripts, shaders, tests
 docs/                         guide, reference, roadmap, design notes, measurements
 ```
 

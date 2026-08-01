@@ -1,160 +1,104 @@
-# Unity Regatta scenario — build recipe
+# Unity Regatta scenario
 
-The Regatta production scene is on Unity branch
-`feature/regatta-scenario`. It provides the boat assets, Addressable entry, and
-bridge integration; `main` may still open from a stray working-tree copy, but
-lacks the `focus_v2` Addressable key and fails at spawn with
-`InvalidKeyException`. This doc remains the recipe to rebuild the scene from
-scratch if needed.
+The active renderer is the sibling project
+[`LOTUSim-Unity6-modules`](https://github.com/cmoron-lab/LOTUSim-Unity6-modules),
+on `main`:
 
-- Project: `LOTUSim-Unity-modules` (fork `cmoron-lab`), Unity `2023.1.20f1`,
-  HDRP `15.0.7`.
-- Branch: `feature/regatta-scenario`.
+- Unity `6000.3.21f1`;
+- HDRP `17.3.0`;
+- scene `Assets/Scenes/Regatta/Regatta.unity`.
 
-## Scene contents
+This repository owns the scenario and simulation stack. The Unity 6 project is
+the sole source of truth for renderer scripts, shaders, scenes, prefabs, and
+EditMode tests.
 
-Start from a duplicate of `defenseScenario` (it already has the LOTUSim bridge
-wired) and strip it down:
+## Runtime boundary
 
-- **World Script** → `LotusimInterface` component: set `m_namespace = "lotusim"`.
-  This **must equal the gz world name** (`regatta.world`'s `<world name="lotusim">`)
-  — the single most critical setting; everything else fails silently if it's wrong.
-- **Game Manager** (multi-user login flow, inherited from defenseScenario) —
-  delete, not needed for a single-boat headless-driven demo.
-- Defense decor, the Leap Motion rig, the old camera rig — disable, not needed.
-- **Marks and buoys** come from the simulation stack through the bridge. Do not
-  add static scene copies: they duplicate the bridged objects and drift from
-  the authoritative scenario.
-- **Ocean**: HDRP `WaterSurface` component, `Ripples Wind Speed ≈ 2` — this is
-  a rendering-only knob; the physics wind/sea is flat (uniform wind lives in
-  `focus_v2.yaml`, not the visual ocean).
+Unity renders poses and commands received through ROS-TCP; it does not compute
+the boat physics. Keep the scene's `LotusimInterface` namespace set to `lotusim`,
+matching the `<world name="lotusim">` in `regatta.world`.
 
-## The boat
+Do not place the boat or marks by hand. The bridge spawns them from renderer
+commands, and `renderer_type_name = focus_v2` resolves the Addressable prefab at
+`Assets/models/focus_v2/focus_v2.prefab`. A hand-placed copy becomes an inert
+duplicate beside the simulated object.
 
-**Never place the boat by hand** — it is spawned at runtime by the bridge
-(`renderer_type_name = focus_v2` resolves to the Addressable) the moment gz
-issues the `renderer_cmd` CREATE. A hand-placed boat becomes a second, inert
-"ghost" boat sitting next to the real one — the most common setup mistake here.
+The active scenario scripts live under `Assets/Scripts/Regatta/` in the Unity 6
+project:
 
-Prefab structure: a root object + a child FBX (`Rotation Y = 270`, the
-connector's heading convention) with `ActuatorAnimator` attached to the root.
+- `ActuatorAnimator` animates the mainsail and rudder from vessel commands;
+- `ManualHelm` publishes an optional manual override;
+- `RegattaCameraRig` provides chase, orbit, onboard, and free cameras;
+- `RegattaHud` and `RenderBudget` provide the runtime display controls;
+- `NativeFoamWakeController` is the only wake implementation.
 
-## Scripts
+The wake uses one subtle bow stamp and one stronger stern stamp through
+`Assets/Shaders/WakeFoamStamp.shader`. It writes foam into HDRP's persistent
+world-space buffer and deliberately adds no analytical wave deformation.
 
-Source of truth is `unity/*.cs` in **this** repo; deployed copies live at
-`Assets/Scripts/Regatta/` in the Unity project.
+## Run in the editor
 
-- `ActuatorAnimator` — subscribes to `/lotusim/vessel_cmd_array`, parses
-  `mainsail(sheet)` / `rudder(helm)` from the JSON `cmd_string`, and swings the
-  boom to leeward based on the geometric bearing of `BowNose` vs `Hull`
-  against the wind (no frame-convention assumption baked in). Inspector knobs
-  `sailSign` / `rudderSign` flip a convention live without recompiling.
-- `RegattaCameraRig` — chase / orbit / onboard / free-FPS modes, cycled with
-  `C`; RMB-drag to look around, wheel to zoom/adjust speed.
-- `ManualHelm` — `M` (or gamepad Start) toggles manual helm, publishing on
-  `/lotusim/manual_cmd_array`. The helmsman treats a fresh manual message as an
-  override and silence as "the algo sails" — no mode topic, so a dead Unity
-  hands the helm back by itself. Inputs: arrow keys always; any two physical
-  axes via the new Input System — defaults are baked in (helm = T-Rudder toe
-  brakes, one per side; sheet = Warthog stick X, right hauls in), `B` runs a
-  3-phase excursion-based rebind (push right / push left / push toward haul).
-  A phantom axis parked at an extreme can never win a bind — it does not move.
-  Float PlayerPrefs proved unreliable (read back as zeroes), so a persisted
-  bind with `sign`/`span` 0 is treated as corrupt and the baked defaults win.
-  Caveat: the FREE camera also reads the arrows; sail from the other modes.
-- `NativeFoamWakeController` — the active native HDRP wake: four dynamic,
-  periodically driven `WaterFoamGenerator`s per boat (stern arms plus bow and
-  stern injection) and a `BowWave` `WaterDeformer`. The legacy `WakeEmitter`
-  trail is disabled, so the scene renders one wake implementation only.
+From this repository:
 
-HDRP permits 64 foam generators. This milestone is qualified for one boat;
-16 boats saturate that global limit and a 17th loses generators. Introduce a
-shared generator pool before qualifying a fleet of that size.
+```bash
+UNITY=1 ./scripts/run_regatta.sh 900 hold
+```
 
-### Unity on Windows
+The script starts the ROS-TCP endpoint and waits for Unity. Open the Regatta
+scene in the sibling project and press Play when the terminal prints
+`[*] waiting for Unity ...`.
 
-The project files must live on the **Windows** filesystem (here
-`C:\Users\cyril\lotusim-unity`) — the editor is not usable against `\\wsl$`.
-That working tree is the production Unity `2023.1.20f1` / HDRP `15.0.7`
-checkout on `feature/regatta-scenario`.
-The ROS IP stays `127.0.0.1`: WSL2 forwards localhost from Windows into Linux,
-so the endpoint on `:10000` is reachable as-is. Deploy scripts from WSL via
-`/mnt/c/Users/cyril/lotusim-unity/Assets/Scripts/Regatta/`.
+Keep the Unity editor focused during Play: an unfocused editor throttles this
+project and can stop the scene from advancing. Use `hold`, not `smoke`, for an
+interactive session; `smoke` is a pass/fail gate with a hard timeout.
+
+Useful controls:
+
+- `C`: cycle camera modes;
+- `M`: toggle manual helm;
+- arrow keys: rudder and sheet in manual mode;
+- `B`: rebind physical helm and sheet axes;
+- `K`, `L`, `O`: change render-budget presets.
 
 ## EditMode verification
 
 With the editor closed:
 
 ```bash
-'/mnt/c/Program Files/Unity/Hub/Editor/2023.1.20f1/Editor/Unity.exe' \
-  -batchmode -projectPath 'C:\Users\cyril\lotusim-unity' \
+cd ../LOTUSim-Unity6-modules
+/Applications/Unity/Hub/Editor/6000.3.21f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath "$PWD" \
   -runTests -testPlatform EditMode \
-  -testResults 'C:\Users\cyril\lotusim-unity\Logs\editmode.xml' \
-  -logFile 'C:\Users\cyril\lotusim-unity\Logs\editmode.log'
+  -testResults /tmp/lotusim-unity6-editmode.xml \
+  -logFile /tmp/lotusim-unity6-editmode.log
 ```
 
-Do not add `-quit`: the Test Runner exits Unity itself, while `-quit` can stop
-before the tests and still return 0. Verify the generated XML has
-`result="Passed"`; the process exit code alone is insufficient.
+Do not combine `-runTests` with `-quit`: the Test Runner exits Unity itself.
+Check that the generated XML reports `result="Passed"`; the process exit code
+alone is not sufficient proof.
 
-## Standalone player (no editor)
+## Standalone player
 
-`Assets/Editor/BuildRegatta.cs` selects the host platform. On the production
-Windows worktree it creates `Builds/Regatta/Regatta.exe` (editor must be
-closed):
+The same project builds a native player and refreshes its Addressables catalog:
 
 ```bash
-'/mnt/c/Program Files/Unity/Hub/Editor/2023.1.20f1/Editor/Unity.exe' \
-  -batchmode -quit -projectPath 'C:\Users\cyril\lotusim-unity' \
+cd ../LOTUSim-Unity6-modules
+/Applications/Unity/Hub/Editor/6000.3.21f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -quit -projectPath "$PWD" \
   -executeMethod BuildRegatta.Build \
-  -logFile 'C:\Users\cyril\lotusim-unity\Logs\regatta-build.log'
+  -logFile /tmp/lotusim-unity6-build.log
 ```
 
-On macOS the same method creates a native arm64 `Builds/Regatta.app`; on Linux
-it creates `Builds/Regatta/Regatta.x86_64`, provided the matching Unity build
-module is installed. First build ≈ 11 min (HDRP shader variants), then cached.
-Run flow is the same as the editor: start the stack
-(`UNITY=1 ./scripts/run_regatta.sh 900 hold`), then open the player instead of
-pressing Play. Trap: editor-only code outside an `Editor/` folder compiles in
-the editor but breaks player builds (CS0246) — `LotusimConnectorEditor.cs`
-carries the `#if UNITY_EDITOR` guard for this.
+On macOS the output is `Builds/Regatta.app`. Start the simulation stack first,
+then open the player instead of entering Play mode.
 
-## Launch order
+## Troubleshooting
 
-```bash
-UNITY=1 ./scripts/run_regatta.sh 900 hold
-```
-
-`run_regatta.sh` starts the ROS-TCP endpoint **first**, before xdyn/helmsman/gz
-— under Rosetta it doubles as the DDS participant that unblocks gz's own ROS2
-plugins (see the DDS-deadlock note in `HANDOFF-gz-beat.md`). The script then
-waits (polling `/tmp/endpoint.log` for `"Connection from"`) for Unity to
-connect — open the Regatta scene and press Play once you see
-`[*] waiting for Unity ...` in the terminal.
-
-## Troubleshooting (pitfalls actually hit)
-
-- **QoS DURABILITY mismatch**: a `volatile` publisher is silently rejected by
-  a `TRANSIENT_LOCAL` subscriber (or vice versa) — nothing moves, no error in
-  Unity. Proof is in `/tmp/endpoint.log` *inside the container*, not the Unity
-  console.
-- **`smoke` mode kills the stack mid-session** — it's a pass/fail gate with a
-  hard timeout; use `hold` for anything interactive.
-- **Bee/Mono crash, FD 1028**, after a long editor session — restart the
-  Unity editor, not a code fix.
-- **Serialized fields mask script defaults** — once a component's field has
-  been touched in the Inspector, the serialized value wins over the script's
-  default on every reload; check the Inspector, not just the source, when a
-  "default" doesn't seem to apply.
-- **OBJ importer merges materials** that the FBX export kept separate — import
-  the `.fbx`, not the `.obj`, and bake the axis conversion into the export
-  (`bake_space_transform`) rather than relying on the importer.
-- **Pivots = Blender origins** — a part's rotation pivot in Unity is exactly
-  its mesh origin in Blender; get the origin right at export time, there is no
-  cheap fix in Unity afterward.
-- **Game view vs. Display 1** — the Game view can be pointed at a display
-  other than the one actually rendering; if the view looks frozen/black,
-  check which Display tab is selected before debugging further.
-- **Gizmos** — mark/wind-indicator debug gizmos are easy to mistake for real
-  geometry; toggle the Gizmos button off when checking what a student would
-  actually see.
+- A QoS durability mismatch can reject traffic without a visible Unity error;
+  inspect `/tmp/endpoint.log` in the `regatta` container.
+- Serialized Inspector values override script defaults after a field has been
+  touched; inspect the prefab when a source default appears ineffective.
+- If the Game view looks frozen or black, check the selected Display tab before
+  debugging the renderer.
+- Disable Gizmos when judging the production image; debug markers are not part
+  of the rendered scenario.

@@ -88,13 +88,12 @@ stops the whole editor. Fixed with per-OS guards plus a Linux build target
 `ros_tcp_endpoint` is now built by `install.sh` — it came from the Docker image
 before, so the documented `UNITY=1` procedure would have failed on a fresh clone.
 
-**Windows/HDRP production cutover completed, 2026-07-29.** The canonical Windows
-project now runs Unity `2023.1.20f1` with HDRP `15.0.7` and the native foam wake.
-The recorded evidence is EditMode `41/41`, a successful Windows player build
-with 9 warnings, and accepted mono-boat visual validation. A separate Windows
-player containing the existing `Launcher` and `defenseScenario` scenes also
-builds successfully; their visual non-regression and multi-boat foam remain
-unqualified.
+**Unity 6 production cutover completed, 2026-07-31.** The canonical renderer is
+now `LOTUSim-Unity6-modules` on `main`, using Unity `6000.3.21f1` with HDRP
+`17.3.0`. The Regatta scene, Addressables, foam wake, render-budget controls,
+and native arm64 macOS player are ported and visually validated. The Unity 2023
+project and its broader defense-demo content are retired from the Regatta
+production path; their dated measurements remain as historical evidence.
 
 **Web UI.** Works, and is not a priority. Five upstream defects met along the way:
 
