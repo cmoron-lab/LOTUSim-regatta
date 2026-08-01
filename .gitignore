@@ -10,3 +10,5 @@ _tap.jsonl
 _probe.jsonl
 _oracle.jsonl
 _patched_lib/
+offline/_cosim_model.yaml
+offline/_regatta_model.yaml

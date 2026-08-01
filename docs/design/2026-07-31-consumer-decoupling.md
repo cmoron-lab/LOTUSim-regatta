@@ -1,6 +1,6 @@
 # Consumer decoupling: bound the queues, open per-topic QoS
 
-Status: **draft — pending review** (patch ready on a local branch, not pushed)
+Status: **design record — not integrated**
 
 ## Problem
 
@@ -27,7 +27,7 @@ once per frame) is the residual third queue; endpoint-side coalescing bounds
 what reaches it in practice (at most ~one state frame per send cycle), so it
 is out of scope here.
 
-## Patch (fork `LOTUSim-Unity-ros-tcp-endpoint`, branch `feat/consumer-decoupling`, commit `0578e71`)
+## Proposed patch (fork `LOTUSim-Unity-ros-tcp-endpoint`, commit `0578e71`)
 
 Two opt-in ROS parameters on the endpoint node, **empty by default —
 behavior unchanged unless configured**:

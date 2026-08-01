@@ -69,8 +69,10 @@ if [ -n "${UNITY:-}" ]; then
   # executor -- without this patch the endpoint registers Unity's topics and
   # then forwards nothing. Idempotent, no-op once applied.
   echo "[*] patching ros_tcp_endpoint for rclpy 7.1.x (scripts/patch_endpoint_executor.py)"
-  python3 "$REGATTA_ROOT/scripts/patch_endpoint_executor.py" || \
-    echo "[!] WARNING: endpoint patch failed -- Unity may receive nothing."
+  if ! python3 "$REGATTA_ROOT/scripts/patch_endpoint_executor.py"; then
+    echo "[!] endpoint patch failed -- aborting UNITY run."
+    exit 1
+  fi
   echo "[*] ros_tcp_endpoint on 0.0.0.0:10000"
   ros2 run ros_tcp_endpoint default_server_endpoint \
     --ros-args -p ROS_IP:=0.0.0.0 -p ROS_TCP_PORT:=10000 > /tmp/endpoint.log 2>&1 & EPID=$!
