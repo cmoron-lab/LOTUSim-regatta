@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/multiplatform-harness
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: 0.11.3
+          enable-cache: true
+
+      - run: uv sync --locked --dev
+      - run: uv run pytest -q
+      - run: >-
+          uv run --with ruff==0.16.1 ruff check
+          assets/blend/author_sail_shapes.py --select E4,E7,E9,F
+
+      - id: blender-cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/blender/4.5.11
+          key: blender-4.5.11-linux-x64-05ed7bd4
+      - if: steps.blender-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/blender-4.5.11-linux-x64.tar.xz"
+          curl -fsSL \
+            https://download.blender.org/release/Blender4.5/blender-4.5.11-linux-x64.tar.xz \
+            -o "$archive"
+          echo "05ed7bd41bf3e61ae4f4a7cdc364c43088bf8b3fed702c2269c018fdf63a2188  $archive" \
+            | sha256sum --check
+          mkdir -p "$HOME/.cache/blender/4.5.11"
+          tar -xJf "$archive" --strip-components=1 \
+            -C "$HOME/.cache/blender/4.5.11"
+      - run: echo "$HOME/.cache/blender/4.5.11" >> "$GITHUB_PATH"
+
+      - name: Verify deterministic sail export
+        shell: bash
+        run: |
+          blender --background assets/blend/focus_v2.blend --python-exit-code 1 \
+            --python assets/blend/author_sail_shapes.py -- \
+            --output-fbx "$RUNNER_TEMP/focus_v2.fbx"
+          blender --background --python-exit-code 1 \
+            --python assets/blend/author_sail_shapes.py -- \
+            --verify-fbx "$RUNNER_TEMP/focus_v2.fbx"
+          git diff --exit-code -- assets/blend/focus_v2.blend

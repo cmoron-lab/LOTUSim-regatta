@@ -184,7 +184,7 @@ git commit -S -m "feat(assets): preserve reproducible sail sources"
 - Consumes: `.python-version`, `uv.lock`, `assets/blend/focus_v2.blend`, and the generator CLI from Task 1.
 - Produces: one required-capable `verify` job for pushes and pull requests.
 
-- [ ] **Step 1: Add the minimal workflow**
+- [x] **Step 1: Add the minimal workflow**
 
 Create `.github/workflows/ci.yml` with this complete content:
 
@@ -207,6 +207,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7.0.0
@@ -252,7 +253,7 @@ jobs:
           git diff --exit-code -- assets/blend/focus_v2.blend
 ```
 
-- [ ] **Step 2: Exercise every workflow command locally**
+- [x] **Step 2: Exercise every workflow command locally**
 
 Run the Python commands exactly as written. Run the Blender commands with the
 local Blender 4.5.x preflight binary and a temporary output, then confirm:
@@ -275,7 +276,7 @@ git diff --check
 
 Expected: all commands exit zero and the source `.blend` stays unchanged.
 
-- [ ] **Step 3: Commit the CI gate**
+- [x] **Step 3: Commit the CI gate**
 
 ```bash
 git add .github/workflows/ci.yml
