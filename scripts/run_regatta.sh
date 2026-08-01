@@ -69,9 +69,15 @@ command -v docker > /dev/null || {
 IMAGE=${IMAGE:-lotusim:focus-v2}
 LAB=${LAB:-$(cd "$REGATTA_ROOT/.." && pwd)}
 UNITY_PORT=; [ -n "${UNITY:-}" ] && UNITY_PORT="-p 10000:10000"
-# In-container bash is PID1 and ignores SIGINT, so the EXIT trap never fires
-# without this host-side backstop.
-trap 'docker rm -f regatta >/dev/null 2>&1' INT TERM
+# Keep this host wrapper alive while Docker runs: the container's PID1 ignores
+# SIGINT, so only the wrapper can turn the first Ctrl-C into a forced removal.
+stop_container() {
+  trap '' INT TERM
+  docker rm -f regatta >/dev/null 2>&1
+  exit "$1"
+}
+trap 'stop_container 130' INT
+trap 'stop_container 143' TERM
 # The image ships the core prebuilt at /lotusim_ws but sources none of it, so the
 # container needs the environment install.sh would have left behind -- and env.sh
 # is what builds it. It is sourced HERE rather than left to regatta_stack.sh's own
@@ -85,10 +91,11 @@ trap 'docker rm -f regatta >/dev/null 2>&1' INT TERM
 # machine has and this container does not. What is passed in is prepended to, never
 # replaced by, env.sh.
 REPO_IN_LAB="/lab/$(basename "$REGATTA_ROOT")"
-exec docker run --rm --platform linux/amd64 --name regatta -v "$LAB":/lab \
+docker run --rm --platform linux/amd64 --name regatta -v "$LAB":/lab \
   $UNITY_PORT \
   -e DUR="$DUR" -e MODE="$MODE" -e UNITY="${UNITY:-}" -e WS_TAP="${WS_TAP:-}" \
   -e LOTUSIM_WS=/lotusim_ws \
   -e PYTHONPATH="$REPO_IN_LAB/src/regatta_agents" \
   "$IMAGE" bash -lc \
-  ". $REPO_IN_LAB/env.sh && $REPO_IN_LAB/scripts/regatta_stack.sh \"\$DUR\" \"\$MODE\""
+  ". $REPO_IN_LAB/env.sh && $REPO_IN_LAB/scripts/regatta_stack.sh \"\$DUR\" \"\$MODE\"" &
+wait "$!"
