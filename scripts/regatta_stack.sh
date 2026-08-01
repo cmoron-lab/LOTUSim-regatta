@@ -65,6 +65,12 @@ trap cleanup EXIT
 if [ -n "${UNITY:-}" ]; then
   # Endpoint first: Unity should be attached before the sim starts, so the
   # opening moments of the lap are rendered rather than missed.
+  # rclpy 7.1.x (Jazzy, 2026 images) never services nodes added to a spinning
+  # executor -- without this patch the endpoint registers Unity's topics and
+  # then forwards nothing. Idempotent, no-op once applied.
+  echo "[*] patching ros_tcp_endpoint for rclpy 7.1.x (scripts/patch_endpoint_executor.py)"
+  python3 "$REGATTA_ROOT/scripts/patch_endpoint_executor.py" || \
+    echo "[!] WARNING: endpoint patch failed -- Unity may receive nothing."
   echo "[*] ros_tcp_endpoint on 0.0.0.0:10000"
   ros2 run ros_tcp_endpoint default_server_endpoint \
     --ros-args -p ROS_IP:=0.0.0.0 -p ROS_TCP_PORT:=10000 > /tmp/endpoint.log 2>&1 & EPID=$!
