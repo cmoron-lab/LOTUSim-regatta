@@ -53,7 +53,7 @@ Windows path:
 
 ```bash
 UNITY_PROJECT=${UNITY_PROJECT:-../LOTUSim-Unity6-modules}
-blender --background assets/blend/focus_v2.blend \
+blender --background assets/blend/focus_v2.blend --python-exit-code 1 \
   --python assets/blend/author_sail_shapes.py -- \
   --output-fbx "$UNITY_PROJECT/Assets/models/focus_v2/mesh/focus_v2.fbx"
 ```
@@ -71,7 +71,8 @@ One Ubuntu 24.04 workflow runs without ROS, Gazebo, or Unity:
 4. cached official Blender 4.5.11;
 5. headless generation to runner temporary storage;
 6. fresh empty-scene import through `--verify-fbx`;
-7. `git diff --exit-code -- assets/blend/focus_v2.blend` to prove the default
+7. `--python-exit-code 1` so Blender propagates script failures;
+8. `git diff --exit-code -- assets/blend/focus_v2.blend` to prove the default
    generation path did not overwrite its source.
 
 The workflow is a verification gate only. It does not publish artifacts or
