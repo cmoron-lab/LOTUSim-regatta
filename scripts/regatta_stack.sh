@@ -37,6 +37,9 @@ python3 -c "import lotusim_msgs" 2> /dev/null || {
   echo "[!] lotusim_msgs is not importable: the core's ROS overlay is not sourced."
   echo "[!] . $REGATTA_ROOT/env.sh -- and check LOTUSIM_WS=$LOTUSIM_WS is the right one."
   exit 1; }
+ros2 pkg prefix ros_gz_bridge > /dev/null 2>&1 || {
+  echo "[!] ros_gz_bridge is unavailable -- run install.sh"
+  exit 1; }
 
 # A gz left over from an earlier run keeps publishing on the same topics: the pose
 # stream then carries two boats and the smoke gate believes whichever it sees first.
@@ -131,7 +134,8 @@ python3 -u -m regatta_agents.helmsman --ros-args -p use_sim_time:=true \
   > /tmp/helm.log 2>&1 & HPID=$!
 sleep 3
 
-lotusim --assets-path "$ASSETS_ARG" run "$WORLD_ARG" > /tmp/gz.log 2>&1 & GPID=$!
+GZ_CONFIG_PATH="/usr/share/gz${GZ_CONFIG_PATH:+:$GZ_CONFIG_PATH}" \
+  lotusim --assets-path "$ASSETS_ARG" run "$WORLD_ARG" > /tmp/gz.log 2>&1 & GPID=$!
 sleep 8
 
 RC=0

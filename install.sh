@@ -30,6 +30,9 @@ export PATH="$LOTUSIM_PATH/launch:$PATH"
 lotusim install_lotus
 ok "core installed"
 
+sudo apt-get install -y ros-jazzy-ros-gz-bridge
+ok "clock bridge installed"
+
 # The Unity bridge. `install_lotus` does not bring it, and without it the documented
 # UNITY=1 run waits 120s for a connection that cannot arrive, then falls back to
 # headless -- a documented procedure that fails, which is the defect this repository
@@ -43,7 +46,7 @@ fi
 set +u
 source "/opt/ros/${ROS_DISTRO:-jazzy}/setup.bash"
 ( cd "$LOTUSIM_WS" && colcon build --packages-select ros_tcp_endpoint \
-    --merge-install --symlink-install )
+    --merge-install )
 set -u
 ok "unity bridge built"
 

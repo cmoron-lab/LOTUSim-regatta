@@ -16,14 +16,24 @@ Root cause (proven live, 2026-08-01, container lotusim:focus-v2):
 
 Patch: replace the central executor with per-node daemon spinner threads,
 each owning a private SingleThreadedExecutor.
-Idempotent. Applies to the INSTALLED package inside the container:
+Idempotent. Applies to the installed package in LOTUSIM_WS:
   docker exec regatta python3 /lab/LOTUSim-regatta/scripts/patch_endpoint_executor.py
 """
+
+import os
 import py_compile
 import re
 import sys
 
-TARGET = "/lotusim_ws/install/lib/python3.12/site-packages/ros_tcp_endpoint/server.py"
+TARGET = os.path.join(
+    os.environ.get("LOTUSIM_WS", "/lotusim_ws"),
+    "install",
+    "lib",
+    f"python{sys.version_info.major}.{sys.version_info.minor}",
+    "site-packages",
+    "ros_tcp_endpoint",
+    "server.py",
+)
 
 NEW_SETUP = '''    def _spin_node(self, node):
         """Spin one node on its own daemon thread.
@@ -82,8 +92,7 @@ def main() -> int:
         "            old_node.unregister()\n"
         "            if self.executor is not None:\n"
         "                self.executor.remove_node(old_node)",
-        "        if old_node is not None:\n"
-        "            old_node.unregister()",
+        "        if old_node is not None:\n            old_node.unregister()",
     )
 
     assert "_spin_node(self)" in src, "setup_executor replacement failed"
