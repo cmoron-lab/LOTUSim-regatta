@@ -153,6 +153,22 @@ than stopping, because sailing on is the only behaviour that keeps her on the
 course area. Stopping her would need a stall branch in the sail model, not a change
 to the pilot. Three trims were measured; see `measurements/2026-07-WSL.md`, Q4.
 
+## Never hand xdyn two YAML files
+
+It concatenates its inputs as raw text and parses the result as one document, so a
+top-level section present in both becomes a duplicate key — and which one wins is
+a property of the yaml library, not of the argument order. The bundled CMake build
+kept the LAST occurrence; lxdyn 26.8.1 (yaml-cpp 0.9) keeps the FIRST. Nothing
+warns, and the two engines are numerically identical, so it reads as a physics
+regression: on 26.8.1 the boat silently sailed the model's demo breeze, 90° off
+the regatta wind, and missed the leeward mark.
+
+`scripts/merge_conditions.py` merges the sections and the stack passes one file.
+The offline oracle was always immune — `regatta.xdyn.write_model` already wrote a
+single model — which is why the fast probes stayed green while the full stack
+failed. When a bug shows up in the stack but not offline, suspect the seam
+between them before suspecting the physics.
+
 ## Procedures
 
 All of them assume the environment. `. ./env.sh` works in bash and zsh, prints a

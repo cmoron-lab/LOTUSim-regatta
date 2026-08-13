@@ -2,11 +2,15 @@
 # north. Layered onto the core focus_v2 model, which keeps its own demo breeze
 # for the core demo world.
 #
-# The whole section is restated on purpose. xdyn accepts several YAML files but
-# REPLACES a top-level section with the last file's version instead of merging
-# it, so a file carrying only the wind would drop 'no waves' and xdyn would
-# refuse to start: "Force model 'non-linear hydrostatic (fast)' needs a wave
+# The whole section is restated on purpose: it REPLACES the model's, it is not
+# merged into it, so a file carrying only the wind would drop 'no waves' and xdyn
+# would refuse to start: "Force model 'non-linear hydrostatic (fast)' needs a wave
 # model". Measured in docs/measurements/2026-07-WSL.md.
+#
+# scripts/merge_conditions.py does that replacement, and the stack hands xdyn ONE
+# file. Do not hand it this file and the model as two arguments: xdyn concatenates
+# its inputs as raw text, so the section ends up duplicated and which one wins is
+# a property of the yaml library, not of the argument order. See reference.md.
 environment models:
   - model: no waves
     constant sea elevation in NED frame: {value: 0.0, unit: m}
