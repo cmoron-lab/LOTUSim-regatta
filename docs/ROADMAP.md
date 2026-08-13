@@ -141,10 +141,16 @@ plain `127.0.0.1` (WSL2 forwards localhost).
 
 ## Standing notes
 
-- `LOTUSim@regatta-base` = upstream `new_main` + the focus_v2 model + patched xdyn
-  binaries (pending naval-group/LOTUSim-Xdyn#2) + composable `--assets-path`
-  (pending naval-group/LOTUSim#47). Each temporary layer disappears when its upstream
-  PR lands; the branch should melt back into upstream.
+- `LOTUSim@regatta-base` = the focus_v2 model + the upstream lxdyn 26.8.1 binaries +
+  composable `--assets-path` (pending naval-group/LOTUSim#47) + the five
+  `physics_engine_interface` fixes that upstream `main` lost when PR#48 was merged
+  from the wrong branch. Each temporary layer disappears when its upstream PR lands;
+  the branch should melt back into upstream.
+- **The foil heading bug is closed.** `hydrodynamic polar` used to make a foil's force
+  depend on the vessel's compass heading, which is why the boat could not hold a beat.
+  Reported as naval-group/lxdyn#1, fixed upstream in `ac982bf`, confirmed on our stack
+  2026-08-13. The patched `libx-dyn.so` is gone: lxdyn links statically now, so each
+  binary is self-contained and there is no shared object left to patch.
 - **The boat cannot be brought to rest.** The sail polar has no stall regime
   (`Cl = 0.80` at 10° of incidence), so no trim stops her — measured, three
   candidates, in `measurements/2026-07-WSL.md` Q4. Stopping her is a change to the

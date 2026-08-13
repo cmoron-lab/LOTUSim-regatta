@@ -11,7 +11,7 @@ Nothing here is done until these pass. Copy them; do not paraphrase them.
 
 | what | command | expected |
 |---|---|---|
-| unit tests | `uv run pytest -q` | `8 passed` |
+| unit tests | `uv run pytest -q` | `15 passed` |
 | physics oracle | `. ./env.sh && uv run regatta-oracle` | `ORACLE PASS`, 2/2 marks |
 | overlay builds | `. ./env.sh && colcon build --symlink-install` | `1 package finished` |
 | the full stack | `zsh -c './scripts/run_regatta.sh 400 smoke'` | `SMOKE PASS`, exit 0 |
@@ -117,7 +117,7 @@ tests/                  pytest for the pure core
 
 The frontier is **what needs the system's ROS/gz Python**. `rclpy` and
 `gz-transport` come from apt and are not on PyPI; everything else needs nothing at
-all. Reasoning in `docs/design/2026-07-26-layout-and-docs-design.md`.
+all. Reasoning in `docs/adr/0003-package-layout-and-audiences.md`.
 
 ## Conventions
 
@@ -142,4 +142,4 @@ all. Reasoning in `docs/design/2026-07-26-layout-and-docs-design.md`.
 | `docs/reference.md` | someone working on the simulator |
 | this file | agents |
 | `docs/measurements/` | every number, with how it was measured |
-| `docs/design/` | why each decision was taken |
+| `docs/adr/` | why each decision was taken, one per file |

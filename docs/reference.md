@@ -5,7 +5,7 @@ algorithm, `guide.md` is your door; if you are an agent, start from `CLAUDE.md`.
 
 Everything here is something you cannot deduce by reading the code, or something
 that cost someone an hour. Numbers live in `measurements/2026-07-WSL.md`; the
-reasoning behind decisions lives in `design/`.
+reasoning behind decisions lives in `adr/`.
 
 ## Architecture
 
@@ -369,6 +369,7 @@ Listed by **symptom**, because that is what you arrive with.
 - **Numbers and how they were measured**: `measurements/2026-07-WSL.md` — the
   environment-section semantics, whether the gz path needs a seeded initial state,
   native performance, why the boat cannot be stopped.
-- **Decisions and their reasoning**: `design/`.
-- **Executed plans and closed investigations**: `archive/`.
+- **Decisions and their reasoning**: `adr/` — one per file, numbered, superseded
+  rather than rewritten. Executed plans and closed investigations are not kept: the
+  code, its tests and the commit messages are their record.
 - **Unity scene recipe**: `unity-scenario.md`.
