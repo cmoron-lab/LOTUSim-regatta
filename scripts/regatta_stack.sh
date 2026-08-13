@@ -89,12 +89,17 @@ if [ -n "${UNITY:-}" ]; then
 fi
 
 # xdyn co-sim. --dt 0.005 is the physics-proven step (0.02 diverges): do not tune it.
-# Two YAML files: the core vessel model, then the scenario conditions, whose
-# environment section replaces the core's demo breeze.
+# ONE merged YAML: core vessel model with its demo breeze replaced by the scenario
+# conditions. Passing both files to xdyn relied on its duplicate-key resolution,
+# which flipped between xdyn releases (see scripts/merge_conditions.py) -- the
+# lxdyn 26.8.1 binaries silently sailed the demo breeze, 90 degrees off.
 MODEL="$LOTUSIM_PATH/assets/models/focus_v2/focus_v2.yaml"
 CONDITIONS="$REGATTA_ROOT/assets/conditions/regatta_conditions.yaml"
+MERGED=/tmp/regatta_model_merged.yaml
+python3 "$REGATTA_ROOT/scripts/merge_conditions.py" "$MODEL" "$CONDITIONS" "$MERGED" || {
+  echo "[!] merging $CONDITIONS into $MODEL failed"; exit 1; }
 ( cd "$LOTUSIM_PATH/assets/models" && LD_LIBRARY_PATH="$LOTUSIM_PATH/physics" \
-  "$LOTUSIM_PATH/physics/xdyn-for-cs" "$MODEL" "$CONDITIONS" \
+  "$LOTUSIM_PATH/physics/xdyn-for-cs" "$MERGED" \
   -s rk4 --dt 0.005 -a 127.0.0.1 -p 12345 ) > /tmp/xdyn.log 2>&1 & XPID=$!
 sleep 4
 
